@@ -773,7 +773,7 @@ function ViewTabla({tareas, onEdit}) {
 }
 
 // App Principal
-export default function App() {
+function App() {
   const [tareas, setTareasRaw] = useState(() => { const d=loadData(); return d?d.tareas:INIT_TAREAS; });
   const [pros, setPros]   = useState(() => { const d=loadData(); return d&&d.pros?d.pros:INIT_PROS; });
   const [horas, setHoras] = useState(() => { const d=loadData(); return d&&d.horas?d.horas:HORAS_DEF; });
