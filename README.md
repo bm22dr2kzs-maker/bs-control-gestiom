@@ -1,1 +1,1 @@
-# bs-control-gestiom
+# bs-control-gestion
