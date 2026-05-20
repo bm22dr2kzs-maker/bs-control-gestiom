@@ -788,13 +788,34 @@ function ViewDisponibilidad({tareas, horas, onUpdateHoras}) {
   });
   const datos = useMemo(()=>ARQUITECTOS.map(arq=>{
     const dis=horas[arq]??41;
+    // Tareas como responsable
     const ts=tareas.filter(t=>t.encargado===arq&&t.estado!=="Completado");
+    // Tareas como colaborador
+    const tsColab=tareas.filter(t=>t.encargado!==arq&&t.estado!=="Completado"&&(t.colaboradores||[]).some(c=>c.arq===arq));
+    const todasTs=[...ts,...tsColab];
     const hSem=semanas.map(({ini,fin})=>{
       let h=0;
+      // Como responsable (descontando % de colaboradores)
       ts.forEach(t=>{
         const tI=t.inicioDate??ini,tF=t.entregaDate??t.comprometidaDate;
         if(!tF)return;
-        const hp=Math.max(0,t.horasProg-t.horasEjec);if(!hp)return;
+        const colPct=(t.colaboradores||[]).reduce((s,c)=>s+(+c.pct||0),0);
+        const respPct=Math.max(0,100-colPct)/100;
+        const hp=Math.max(0,t.horasProg-t.horasEjec)*respPct;
+        if(!hp)return;
+        const dur=Math.max(1,Math.round((tF-tI)/86400000));
+        const oI=new Date(Math.max(tI,ini)),oF=new Date(Math.min(tF,fin));
+        const od=Math.max(0,Math.round((oF-oI)/86400000)+1);
+        h+=hp*(od/dur);
+      });
+      // Como colaborador
+      tsColab.forEach(t=>{
+        const col=(t.colaboradores||[]).find(c=>c.arq===arq);
+        if(!col)return;
+        const tI=t.inicioDate??ini,tF=t.entregaDate??t.comprometidaDate;
+        if(!tF)return;
+        const hp=Math.max(0,t.horasProg-t.horasEjec)*(+col.pct||0)/100;
+        if(!hp)return;
         const dur=Math.max(1,Math.round((tF-tI)/86400000));
         const oI=new Date(Math.max(tI,ini)),oF=new Date(Math.min(tF,fin));
         const od=Math.max(0,Math.round((oF-oI)/86400000)+1);
@@ -802,7 +823,7 @@ function ViewDisponibilidad({tareas, horas, onUpdateHoras}) {
       });
       return Math.round(h*10)/10;
     });
-    return {arq,dis,ts,hSem};
+    return {arq,dis,ts:todasTs,hSem};
   }).filter(d=>d.ts.length>0),[tareas,horas]);
  
   function sem(p,d){
@@ -898,7 +919,12 @@ function ViewTabla({tareas, onEdit}) {
               onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
               <td style={{padding:"8px 10px",color:"#e2e8f0",fontWeight:600,whiteSpace:"nowrap"}}>{t.proyecto}</td>
               <td style={{padding:"8px 10px",color:"#94a3b8",whiteSpace:"nowrap"}}>{t.tarea}</td>
-              <td style={{padding:"8px 10px",color:"#94a3b8",whiteSpace:"nowrap"}}>{t.encargado}</td>
+              <td style={{padding:"8px 10px",whiteSpace:"nowrap"}}>
+                <div style={{color:"#6366f1",fontSize:11}}>{t.encargado}</div>
+                {(t.colaboradores||[]).map((c,i)=>(
+                  <div key={i} style={{color:"#f59e0b",fontSize:10}}>{c.arq} <span style={{color:"#475569"}}>({c.pct}%)</span></div>
+                ))}
+              </td>
               <td style={{padding:"8px 10px"}}><Badge estado={t.estado}/></td>
               <td style={{padding:"8px 10px",minWidth:70}}><BarPct pct={t.pct} color={EC[t.estado]}/></td>
               <td style={{padding:"8px 10px",color:"#94a3b8",whiteSpace:"nowrap"}}>{t.horasEjec}h/{t.horasProg}h</td>
