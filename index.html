@@ -1,41 +1,30 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <meta name="mobile-web-app-capable" content="yes"/>
-  <meta name="apple-mobile-web-app-capable" content="yes"/>
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
-  <meta name="apple-mobile-web-app-title" content="BS Control"/>
-  <title>BS Control de Gestión</title>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
-  <style>
-    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; margin: 0; padding: 0; }
-    body { background: #060f1e; color: #e2e8f0; font-family: 'Segoe UI', system-ui, sans-serif; }
-    ::-webkit-scrollbar { width: 4px; height: 4px; }
-    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
-  </style>
-</head>
-<body>
-  <div id="root"></div>
-  <script type="text/babel">
-const { useState, useMemo, useEffect } = React;
-
-
+import { useState, useMemo, useEffect } from "react";
+ 
 const ARQUITECTOS = ["Felipe Soffia","Fernanda Jimenez","Juan Pablo Badia","Marco Aguirre","Nicole Trepiana","Oscar Leiva","Valeria Carbonell","Victor Venegas"];
 const HORAS_DEF = {"Felipe Soffia":41,"Fernanda Jimenez":41,"Juan Pablo Badia":41,"Marco Aguirre":41,"Oscar Leiva":41,"Victor Venegas":41,"Valeria Carbonell":33,"Nicole Trepiana":33};
 const ESTADOS = ["Pendiente Inicio","Iniciado","En Progreso","Avanzado","Casi Terminado","Completado"];
 const EC = {"Pendiente Inicio":"#64748b","Iniciado":"#3b82f6","En Progreso":"#f59e0b","Avanzado":"#8b5cf6","Casi Terminado":"#10b981","Completado":"#059669"};
 const EP = {"Pendiente Inicio":0,"Iniciado":0.15,"En Progreso":0.38,"Avanzado":0.67,"Casi Terminado":0.88,"Completado":1};
 const SK = "bs_cg_v4";
-
+ 
 function xd(s){ return (s&&s>1000)?new Date((s-25569)*86400000):null; }
 function ad(d,n){ if(!d)return null; const r=new Date(d); r.setDate(r.getDate()+n); return r; }
 function dd(d){ return d?Math.round((d-new Date())/86400000):null; }
 function fd(d){ return d?d.toLocaleDateString("es-CL",{day:"2-digit",month:"short",year:"2-digit"}):"—"; }
-
+ 
+// Tarea crítica: avance real < avance esperado según tiempo transcurrido, con desfase > 25%
+function esCritica(t) {
+  if (t.estado === "Completado") return false;
+  if (!t.inicioDate || !t.comprometidaDate) return false;
+  const hoy = new Date();
+  const durTotal = Math.max(1, Math.round((t.comprometidaDate - t.inicioDate) / 86400000));
+  const transcurrido = Math.round((hoy - t.inicioDate) / 86400000);
+  if (transcurrido <= 0) return false; // aún no ha comenzado
+  const pctEsperado = Math.min(1, transcurrido / durTotal);
+  const desfase = pctEsperado - t.pct;
+  return desfase > 0.25; // más de 25 puntos de desfase
+}
+ 
 const RAW = [
   {id:1,m:"Inmobiliaria Security",p:"SECURITY LO MATTA",j:"Felipe Soffia",t:"DOM RF",e:"Nicole Trepiana",s:"Pendiente Inicio",hp:60,he:0,i:46174,pl:30,c:46204,pe:"Actualizar planos As-Built"},
   {id:2,m:"Inmobiliaria Security",p:"SECURITY LO MATTA",j:"Felipe Soffia",t:"DOM Copropiedad",e:"Nicole Trepiana",s:"Casi Terminado",hp:60,he:50,i:46083,pl:60,c:46143,pe:""},
@@ -83,19 +72,20 @@ const RAW = [
   {id:44,m:"Inmobiliaria ICICLOS",p:"ICICLOS LOS SUSPIROS",j:"Fernanda Jimenez",t:"ARQ Detalles",e:"Fernanda Jimenez",s:"Pendiente Inicio",hp:300,he:0,i:46174,pl:180,c:46354,pe:""},
   {id:45,m:"Inmobiliaria ICICLOS",p:"ICICLOS LOS SUSPIROS",j:"Juan Pablo Badia",t:"ARQ EETT",e:"Juan Pablo Badia",s:"Pendiente Inicio",hp:30,he:0,i:46204,pl:30,c:46234,pe:""},
 ];
-
+ 
 const INIT_TAREAS = RAW.map(r => ({
   id:r.id, mandante:r.m, proyecto:r.p, jefe:r.j, tarea:r.t, encargado:r.e,
   estado:r.s, horasProg:r.hp, horasEjec:r.he, plazo:r.pl, pendientes:r.pe,
+  colaboradores: [], // [{arq, pct}] hasta 2
   inicioDate:xd(r.i), comprometidaDate:xd(r.c), entregaDate:ad(xd(r.i),r.pl),
   pct:EP[r.s]||0
 }));
 const INIT_PROS = [...new Set(INIT_TAREAS.map(t => t.proyecto))];
-
+ 
 // Storage — JSONBin (cloud, cross-device) + localStorage fallback
 const JKEY = "$2a$10$N7WPX6xsFFXM03.pFWMIE.R3UaX.Z2ewfNQWSEU8lcQNvyWmQwvqW";
 const BIN_ID_KEY = SK + "_bid";
-
+ 
 function serialize(tareas) {
   return tareas.map(t => ({...t,
     inicioDate: t.inicioDate ? t.inicioDate.toISOString() : null,
@@ -112,7 +102,7 @@ function deserialize(tareas) {
 }
 function getBinId() { try { return localStorage.getItem(BIN_ID_KEY) || "6a0ce86a6877513b279d45a4"; } catch(e) { return "6a0ce86a6877513b279d45a4"; } }
 function setBinId(id) { try { localStorage.setItem(BIN_ID_KEY, id); } catch(e) {} }
-
+ 
 function saveData(tareas, horas, pros) {
   const body = JSON.stringify({ tareas: serialize(tareas), horas, pros, ts: new Date().toISOString() });
   try { localStorage.setItem(SK, body); } catch(e) {}
@@ -148,8 +138,8 @@ function fetchBin(binId, onLoaded) {
     }
   }).catch(() => {});
 }
-
-
+ 
+ 
 // UI components
 function Badge({estado}) {
   return (
@@ -158,7 +148,7 @@ function Badge({estado}) {
     </span>
   );
 }
-
+ 
 function BarPct({pct, color="#6366f1", h=4}) {
   return (
     <div style={{background:"#1e293b",borderRadius:99,height:h,overflow:"hidden"}}>
@@ -166,17 +156,17 @@ function BarPct({pct, color="#6366f1", h=4}) {
     </div>
   );
 }
-
+ 
 function DaysLeft({date}) {
   const d = dd(date);
   if (d === null) return <span style={{color:"#475569"}}>—</span>;
   const color = d < 0 ? "#ef4444" : d < 7 ? "#f59e0b" : d < 14 ? "#eab308" : "#10b981";
   return <span style={{color, fontWeight:700}}>{d < 0 ? `${Math.abs(d)}d venc.` : `${d}d`}</span>;
 }
-
+ 
 const INP = {background:"#1e293b",border:"1px solid #334155",borderRadius:6,padding:"7px 9px",color:"#e2e8f0",fontSize:13,width:"100%",outline:"none"};
 const SEL_STYLE = {background:"#0f172a",border:"1px solid #1e293b",borderRadius:6,padding:"7px 10px",color:"#e2e8f0",fontSize:12,cursor:"pointer"};
-
+ 
 // Edit Modal
 function ModalEditar({tarea, onSave, onClose, onDelete}) {
   const [f, setF] = useState({
@@ -184,28 +174,56 @@ function ModalEditar({tarea, onSave, onClose, onDelete}) {
     jefe: tarea.jefe, encargado: tarea.encargado, estado: tarea.estado,
     horasProg: tarea.horasProg, horasEjec: tarea.horasEjec, plazo: tarea.plazo,
     pendientes: tarea.pendientes,
+    colaboradores: tarea.colaboradores || [],
     inicioStr: tarea.inicioDate ? tarea.inicioDate.toISOString().slice(0,10) : "",
     comprStr:  tarea.comprometidaDate ? tarea.comprometidaDate.toISOString().slice(0,10) : "",
   });
   const [confirmDel, setConfirmDel] = useState(false);
   const set = (k,v) => setF(p => ({...p,[k]:v}));
-
+ 
+  function setColab(idx, field, val) {
+    setF(p => {
+      const cols = [...p.colaboradores];
+      cols[idx] = {...cols[idx], [field]: field==="pct" ? Math.max(0,Math.min(100,+val)) : val};
+      return {...p, colaboradores: cols};
+    });
+  }
+  function addColab() {
+    if (f.colaboradores.length >= 2) return;
+    // Default pct: split remaining evenly
+    const used = f.colaboradores.reduce((s,c)=>s+c.pct,0);
+    const avail = Math.max(0, 100 - used);
+    const newArq = ARQUITECTOS.find(a => a !== f.encargado && !f.colaboradores.some(c=>c.arq===a));
+    if (!newArq) return;
+    setF(p => ({...p, colaboradores: [...p.colaboradores, {arq: newArq, pct: avail}]}));
+  }
+  function removeColab(idx) {
+    setF(p => ({...p, colaboradores: p.colaboradores.filter((_,i)=>i!==idx)}));
+  }
+ 
+  // Calculate pct distribution
+  const pctResponsable = Math.max(0, 100 - f.colaboradores.reduce((s,c)=>s+(+c.pct||0),0));
+  const pctTotal = f.colaboradores.reduce((s,c)=>s+(+c.pct||0),0);
+  const pctValido = pctTotal <= 100;
+ 
   function guardar() {
+    if (!pctValido) return;
     const ini = f.inicioStr ? new Date(f.inicioStr+"T12:00:00") : tarea.inicioDate;
     const com = f.comprStr  ? new Date(f.comprStr+"T12:00:00")  : tarea.comprometidaDate;
     onSave({...tarea, proyecto:f.proyecto.trim().toUpperCase(), mandante:f.mandante.trim(),
       jefe:f.jefe, encargado:f.encargado, estado:f.estado,
       horasProg:+f.horasProg, horasEjec:+f.horasEjec, plazo:+f.plazo,
-      pendientes:f.pendientes, inicioDate:ini, comprometidaDate:com,
+      pendientes:f.pendientes, colaboradores:f.colaboradores,
+      inicioDate:ini, comprometidaDate:com,
       entregaDate:ad(ini,+f.plazo), pct:EP[f.estado]||0});
   }
-
+ 
   return (
     <div style={{position:"fixed",inset:0,background:"#000b",zIndex:999,display:"flex",alignItems:"center",justifyContent:"center",padding:12}}>
       <div style={{background:"#0f172a",border:"1px solid #334155",borderRadius:12,padding:20,width:"100%",maxWidth:480,color:"#e2e8f0",maxHeight:"92vh",overflowY:"auto"}}>
         <div style={{fontSize:9,color:"#6366f1",textTransform:"uppercase",letterSpacing:1,fontWeight:700,marginBottom:2}}>Editar tarea</div>
         <div style={{fontSize:16,fontWeight:700,color:"#f8fafc",marginBottom:14}}>{tarea.tarea}</div>
-
+ 
         <div style={{display:"grid",gap:10}}>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
             <label style={{display:"flex",flexDirection:"column",gap:3}}>
@@ -237,6 +255,58 @@ function ModalEditar({tarea, onSave, onClose, onDelete}) {
               {ESTADOS.map(e=><option key={e}>{e}</option>)}
             </select>
           </label>
+ 
+          {/* Colaboradores */}
+          <div style={{background:"#0a1628",borderRadius:8,padding:10,border:"1px solid #1e293b"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+              <span style={{fontSize:9,color:"#64748b",textTransform:"uppercase",letterSpacing:1}}>Distribución de horas</span>
+              {f.colaboradores.length < 2 && (
+                <button onClick={addColab} style={{background:"#6366f133",border:"1px solid #6366f144",borderRadius:4,padding:"2px 8px",color:"#818cf8",cursor:"pointer",fontSize:10}}>
+                  + Colaborador
+                </button>
+              )}
+            </div>
+            {/* Responsable */}
+            <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:6}}>
+              <div style={{width:6,height:6,borderRadius:99,background:"#6366f1",flexShrink:0}}/>
+              <span style={{fontSize:11,color:"#e2e8f0",flex:1}}>{f.encargado}</span>
+              <span style={{fontSize:10,color:"#64748b",marginRight:4}}>Responsable</span>
+              <div style={{background:"#6366f133",borderRadius:4,padding:"2px 8px",minWidth:44,textAlign:"center"}}>
+                <span style={{fontSize:11,fontWeight:700,color:"#6366f1"}}>{pctResponsable}%</span>
+              </div>
+              <span style={{fontSize:10,color:"#475569",minWidth:36,textAlign:"right"}}>{Math.round(f.horasProg*pctResponsable/100)}h</span>
+            </div>
+            {/* Colaboradores */}
+            {f.colaboradores.map((col,idx)=>(
+              <div key={idx} style={{display:"flex",alignItems:"center",gap:6,marginBottom:6}}>
+                <div style={{width:6,height:6,borderRadius:99,background:"#f59e0b",flexShrink:0}}/>
+                <select value={col.arq} onChange={e=>setColab(idx,"arq",e.target.value)}
+                  style={{...INP,flex:1,fontSize:11,padding:"4px 6px"}}>
+                  {ARQUITECTOS.filter(a=>a!==f.encargado&&!f.colaboradores.some((c,i)=>i!==idx&&c.arq===a)).map(a=><option key={a}>{a}</option>)}
+                </select>
+                <input type="number" min={0} max={100} value={col.pct}
+                  onChange={e=>setColab(idx,"pct",e.target.value)}
+                  style={{...INP,width:56,padding:"4px 6px",fontSize:11,textAlign:"center"}}/>
+                <span style={{fontSize:10,color:"#475569",minWidth:8}}>%</span>
+                <span style={{fontSize:10,color:"#475569",minWidth:36,textAlign:"right"}}>{Math.round(f.horasProg*(+col.pct||0)/100)}h</span>
+                <button onClick={()=>removeColab(idx)} style={{background:"transparent",border:"none",color:"#ef4444",cursor:"pointer",fontSize:12,padding:"0 2px"}}>✕</button>
+              </div>
+            ))}
+            {!pctValido && (
+              <div style={{fontSize:10,color:"#ef4444",marginTop:4}}>⚠ Los porcentajes de colaboradores superan el 100%</div>
+            )}
+            <div style={{marginTop:6,background:"#1e293b",borderRadius:99,height:4,overflow:"hidden"}}>
+              <div style={{display:"flex",height:"100%"}}>
+                <div style={{width:`${pctResponsable}%`,background:"#6366f1"}}/>
+                {f.colaboradores.map((c,i)=>(
+                  <div key={i} style={{width:`${+c.pct||0}%`,background:i===0?"#f59e0b":"#10b981"}}/>
+                ))}
+              </div>
+            </div>
+            <div style={{display:"flex",justifyContent:"flex-end",marginTop:4}}>
+              <span style={{fontSize:9,color:"#475569"}}>Total: {100-pctResponsable}% colaboradores · {f.horasProg}h totales</span>
+            </div>
+          </div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
             <label style={{display:"flex",flexDirection:"column",gap:3}}>
               <span style={{fontSize:9,color:"#64748b",textTransform:"uppercase",letterSpacing:1}}>Horas prog.</span>
@@ -266,7 +336,7 @@ function ModalEditar({tarea, onSave, onClose, onDelete}) {
             <textarea value={f.pendientes} onChange={e=>set("pendientes",e.target.value)} rows={2} style={{...INP,resize:"vertical"}}/>
           </label>
         </div>
-
+ 
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:18,gap:8}}>
           {confirmDel ? (
             <div style={{display:"flex",alignItems:"center",gap:6}}>
@@ -288,7 +358,7 @@ function ModalEditar({tarea, onSave, onClose, onDelete}) {
     </div>
   );
 }
-
+ 
 // Nueva Tarea Modal
 function ModalNuevaTarea({proyectoCtx, onSave, onClose}) {
   const hoy = new Date().toISOString().slice(0,10);
@@ -300,7 +370,7 @@ function ModalNuevaTarea({proyectoCtx, onSave, onClose}) {
     const com = f.comprStr ? new Date(f.comprStr+"T12:00:00") : ad(ini,+f.plazo);
     onSave({id:Date.now(),mandante:proyectoCtx.mandante,proyecto:proyectoCtx.proyecto,jefe:proyectoCtx.jefe,
       tarea:f.tarea.trim(),encargado:f.encargado,estado:f.estado,horasProg:+f.horasProg,horasEjec:+f.horasEjec,
-      plazo:+f.plazo,pendientes:f.pendientes,inicioDate:ini,comprometidaDate:com,entregaDate:ad(ini,+f.plazo),pct:EP[f.estado]||0});
+      plazo:+f.plazo,pendientes:f.pendientes,colaboradores:[],inicioDate:ini,comprometidaDate:com,entregaDate:ad(ini,+f.plazo),pct:EP[f.estado]||0});
   }
   return (
     <div style={{position:"fixed",inset:0,background:"#000b",zIndex:999,display:"flex",alignItems:"center",justifyContent:"center",padding:12}}>
@@ -359,7 +429,7 @@ function ModalNuevaTarea({proyectoCtx, onSave, onClose}) {
     </div>
   );
 }
-
+ 
 // Nuevo Proyecto Modal
 function ModalNuevoProyecto({onSave, onClose}) {
   const [f, setF] = useState({nombre:"",mandante:"",jefe:ARQUITECTOS[0]});
@@ -391,28 +461,35 @@ function ModalNuevoProyecto({onSave, onClose}) {
     </div>
   );
 }
-
+ 
 // Vista Proyectos
 function ViewProyectos({tareas, pros, onEdit, onAddTarea, onDelProyecto}) {
   const [confDel, setConfDel] = useState(null);
+  const [filtroCrit, setFiltroCrit] = useState(null); // proyecto con filtro crítico activo
+ 
   const grupos = useMemo(() => pros.map(p => {
     const ts = tareas.filter(t => t.proyecto === p);
     if (!ts.length) return null;
     const pct = ts.reduce((s,t)=>s+t.pct,0)/ts.length;
     const hPend = ts.reduce((s,t)=>s+Math.max(0,t.horasProg-t.horasEjec),0);
     const hEjec = ts.reduce((s,t)=>s+t.horasEjec,0);
-    const crit = ts.filter(t=>{const d=dd(t.comprometidaDate);return d!==null&&d<14&&t.estado!=="Completado";});
+    const crit = ts.filter(esCritica);
     return {p, ts, pct, hPend, hEjec, crit, mandante:ts[0].mandante, jefe:ts[0].jefe};
   }).filter(Boolean), [tareas, pros]);
-
+ 
   return (
     <div style={{display:"flex",flexDirection:"column",gap:12}}>
-      {grupos.map(({p,ts,pct,hPend,hEjec,crit,mandante,jefe}) => (
-        <div key={p} style={{background:"#0f172a",border:"1px solid #1e293b",borderRadius:10,overflow:"hidden"}}>
+      {grupos.map(({p,ts,pct,hPend,hEjec,crit,mandante,jefe}) => {
+        const mostrandoCrit = filtroCrit === p;
+        const tareasMostradas = mostrandoCrit ? crit : ts;
+        return (
+        <div key={p} style={{background:"#0f172a",border:`1px solid ${mostrandoCrit?"#ef444455":"#1e293b"}`,borderRadius:10,overflow:"hidden"}}>
           <div style={{padding:"12px 16px",borderBottom:"1px solid #1e293b",display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:8}}>
             <div style={{flex:1,minWidth:160}}>
               <div style={{fontWeight:700,color:"#f1f5f9",fontSize:15}}>{p}</div>
-              <div style={{fontSize:11,color:"#64748b"}}>{mandante} · Jefe: {jefe}</div>
+              <div style={{fontSize:11,color:"#64748b"}}>{mandante} · Jefe: {jefe}
+                {mostrandoCrit && <span style={{marginLeft:8,color:"#ef4444",fontWeight:600}}>· Mostrando solo tareas críticas</span>}
+              </div>
             </div>
             <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
               <div style={{display:"flex",gap:1,borderRadius:6,overflow:"hidden",border:"1px solid #1e293b"}}>
@@ -427,9 +504,12 @@ function ViewProyectos({tareas, pros, onEdit, onAddTarea, onDelProyecto}) {
                   </div>
                 ))}
                 {crit.length>0&&(
-                  <div style={{background:"#7f1d1d33",padding:"6px 12px",textAlign:"center",minWidth:56,borderLeft:"1px solid #ef444433"}}>
+                  <div onClick={()=>setFiltroCrit(mostrandoCrit?null:p)}
+                    style={{background:mostrandoCrit?"#ef444433":"#7f1d1d33",padding:"6px 12px",textAlign:"center",
+                      minWidth:56,borderLeft:"1px solid #ef444433",cursor:"pointer",
+                      border:mostrandoCrit?"1px solid #ef4444":"1px solid #ef444433"}}>
                     <div style={{fontSize:14,fontWeight:800,color:"#ef4444"}}>⚠{crit.length}</div>
-                    <div style={{fontSize:8,color:"#ef4444",textTransform:"uppercase"}}>Críticas</div>
+                    <div style={{fontSize:8,color:"#ef4444",textTransform:"uppercase"}}>{mostrandoCrit?"Ver todas":"Críticas"}</div>
                   </div>
                 )}
               </div>
@@ -452,14 +532,21 @@ function ViewProyectos({tareas, pros, onEdit, onAddTarea, onDelProyecto}) {
             </div>
           </div>
           <div style={{padding:"0 16px 12px",display:"flex",flexDirection:"column",gap:5}}>
-            {ts.map(t=>(
+            {tareasMostradas.map(t=>(
               <div key={t.id} onClick={()=>onEdit(t)}
-                style={{display:"flex",alignItems:"center",gap:8,padding:"7px 9px",background:"#0a1628",borderRadius:6,cursor:"pointer",border:"1px solid transparent"}}
+                style={{display:"flex",alignItems:"center",gap:8,padding:"7px 9px",
+                  background: esCritica(t)?"#7f1d1d22":"#0a1628",
+                  borderRadius:6,cursor:"pointer",border:"1px solid transparent"}}
                 onMouseEnter={e=>e.currentTarget.style.borderColor="#334155"}
                 onMouseLeave={e=>e.currentTarget.style.borderColor="transparent"}>
-                <div style={{flex:"0 0 110px"}}>
+                <div style={{flex:"0 0 130px"}}>
                   <div style={{fontSize:11,color:"#e2e8f0",fontWeight:600}}>{t.tarea}</div>
-                  <div style={{fontSize:9,color:"#64748b"}}>{t.encargado.split(" ")[0]}</div>
+                  <div style={{fontSize:9,color:"#64748b",display:"flex",alignItems:"center",gap:3,flexWrap:"wrap"}}>
+                    <span style={{color:"#6366f1"}}>{t.encargado.split(" ")[0]}</span>
+                    {(t.colaboradores||[]).map((c,i)=>(
+                      <span key={i} style={{color:"#f59e0b"}}> +{c.arq.split(" ")[0]} ({c.pct}%)</span>
+                    ))}
+                  </div>
                 </div>
                 <div style={{flex:1,minWidth:60}}><BarPct pct={t.pct} color={EC[t.estado]}/></div>
                 <Badge estado={t.estado}/>
@@ -467,19 +554,28 @@ function ViewProyectos({tareas, pros, onEdit, onAddTarea, onDelProyecto}) {
                 <div style={{fontSize:10,color:"#475569",flex:"0 0 70px",textAlign:"right"}}>{t.horasEjec}h/{t.horasProg}h</div>
               </div>
             ))}
-            <button onClick={()=>onAddTarea({proyecto:p,mandante:ts[0].mandante,jefe:ts[0].jefe})}
-              style={{marginTop:2,padding:"6px",background:"transparent",border:"1px dashed #334155",borderRadius:6,color:"#475569",cursor:"pointer",fontSize:11,textAlign:"center"}}
-              onMouseEnter={e=>{e.currentTarget.style.borderColor="#6366f1";e.currentTarget.style.color="#6366f1";}}
-              onMouseLeave={e=>{e.currentTarget.style.borderColor="#334155";e.currentTarget.style.color="#475569";}}>
-              + Nueva tarea
-            </button>
+            {mostrandoCrit && (
+              <button onClick={()=>setFiltroCrit(null)}
+                style={{padding:"5px",background:"#ef444411",border:"1px solid #ef444433",borderRadius:6,color:"#ef4444",cursor:"pointer",fontSize:11,textAlign:"center"}}>
+                Ver todas las tareas del proyecto
+              </button>
+            )}
+            {!mostrandoCrit && (
+              <button onClick={()=>onAddTarea({proyecto:p,mandante:ts[0]?.mandante,jefe:ts[0]?.jefe})}
+                style={{marginTop:2,padding:"6px",background:"transparent",border:"1px dashed #334155",borderRadius:6,color:"#475569",cursor:"pointer",fontSize:11,textAlign:"center"}}
+                onMouseEnter={e=>{e.currentTarget.style.borderColor="#6366f1";e.currentTarget.style.color="#6366f1";}}
+                onMouseLeave={e=>{e.currentTarget.style.borderColor="#334155";e.currentTarget.style.color="#475569";}}>
+                + Nueva tarea
+              </button>
+            )}
           </div>
         </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
-
+ 
 // Vista Gantt
 function ViewGantt({tareas, onEdit}) {
   const hoy = new Date();
@@ -492,7 +588,7 @@ function ViewGantt({tareas, onEdit}) {
   let cur = new Date(gIni);
   while(cur<=gFin){meses.push(new Date(cur));cur=new Date(cur.getFullYear(),cur.getMonth()+1,1);}
   const pros = [...new Set(tareas.map(t=>t.proyecto))];
-
+ 
   return (
     <div style={{overflowX:"auto"}}>
       <div style={{minWidth:860}}>
@@ -536,7 +632,7 @@ function ViewGantt({tareas, onEdit}) {
     </div>
   );
 }
-
+ 
 // Vista Carga
 function ViewCarga({tareas}) {
   const hoy = new Date();
@@ -546,16 +642,37 @@ function ViewCarga({tareas}) {
     return {ini,fin,label:`S${i+1}`};
   });
   const datos = useMemo(()=>ARQUITECTOS.map(arq=>{
+    // Tareas como responsable
     const ts=tareas.filter(t=>t.encargado===arq);
-    const hTot=ts.reduce((s,t)=>s+t.horasProg,0);
+    // Tareas como colaborador
+    const tsColab=tareas.filter(t=>t.encargado!==arq&&(t.colaboradores||[]).some(c=>c.arq===arq));
+    const todasTs=[...ts,...tsColab];
+    const hTot=ts.reduce((s,t)=>s+t.horasProg,0)+tsColab.reduce((s,t)=>s+Math.round(t.horasProg*((t.colaboradores||[]).find(c=>c.arq===arq)?.pct||0)/100),0);
     const hEjec=ts.reduce((s,t)=>s+t.horasEjec,0);
-    const crit=ts.filter(t=>{const d=dd(t.comprometidaDate);return d!==null&&d<14&&t.estado!=="Completado";});
+    const crit=ts.filter(esCritica);
     const h30=semanas.map(({ini,fin})=>{
       let h=0;
+      // Como responsable
       ts.filter(t=>t.estado!=="Completado").forEach(t=>{
         const tI=t.inicioDate??ini,tF=t.entregaDate??t.comprometidaDate;
         if(!tF)return;
-        const hp=Math.max(0,t.horasProg-t.horasEjec);if(!hp)return;
+        const colPct=(t.colaboradores||[]).reduce((s,c)=>s+(+c.pct||0),0);
+        const respPct=Math.max(0,100-colPct)/100;
+        const hp=Math.max(0,t.horasProg-t.horasEjec)*respPct;
+        if(!hp)return;
+        const dur=Math.max(1,Math.round((tF-tI)/86400000));
+        const oI=new Date(Math.max(tI,ini)),oF=new Date(Math.min(tF,fin));
+        const od=Math.max(0,Math.round((oF-oI)/86400000)+1);
+        h+=hp*(od/dur);
+      });
+      // Como colaborador
+      tsColab.filter(t=>t.estado!=="Completado").forEach(t=>{
+        const col=(t.colaboradores||[]).find(c=>c.arq===arq);
+        if(!col)return;
+        const tI=t.inicioDate??ini,tF=t.entregaDate??t.comprometidaDate;
+        if(!tF)return;
+        const hp=Math.max(0,t.horasProg-t.horasEjec)*(+col.pct||0)/100;
+        if(!hp)return;
         const dur=Math.max(1,Math.round((tF-tI)/86400000));
         const oI=new Date(Math.max(tI,ini)),oF=new Date(Math.min(tF,fin));
         const od=Math.max(0,Math.round((oF-oI)/86400000)+1);
@@ -563,11 +680,11 @@ function ViewCarga({tareas}) {
       });
       return Math.round(h);
     });
-    return {arq,ts,hTot,hEjec,crit,h30};
+    return {arq,ts:todasTs,hTot,hEjec,crit,h30};
   }).filter(d=>d.ts.length>0),[tareas]);
-
+ 
   const maxH=Math.max(...datos.flatMap(d=>d.h30),1);
-
+ 
   return (
     <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(270px,1fr))",gap:14}}>
       {datos.map(({arq,ts,hTot,hEjec,crit,h30})=>{
@@ -635,7 +752,7 @@ function ViewCarga({tareas}) {
     </div>
   );
 }
-
+ 
 // Vista Disponibilidad
 function ViewDisponibilidad({tareas, horas, onUpdateHoras}) {
   const hoy = new Date();
@@ -664,7 +781,7 @@ function ViewDisponibilidad({tareas, horas, onUpdateHoras}) {
     });
     return {arq,dis,ts,hSem};
   }).filter(d=>d.ts.length>0),[tareas,horas]);
-
+ 
   function sem(p,d){
     const r=p/d;
     if(r>1.1)return{color:"#ef4444",bg:"#ef444422",label:"Sobrecargado"};
@@ -672,7 +789,7 @@ function ViewDisponibilidad({tareas, horas, onUpdateHoras}) {
     if(r<0.1)return{color:"#475569",bg:"#47556922",label:"Sin tareas"};
     return{color:"#10b981",bg:"#10b98122",label:"OK"};
   }
-
+ 
   return (
     <div>
       <div style={{display:"flex",gap:14,marginBottom:16,flexWrap:"wrap"}}>
@@ -738,7 +855,7 @@ function ViewDisponibilidad({tareas, horas, onUpdateHoras}) {
     </div>
   );
 }
-
+ 
 // Vista Tabla
 function ViewTabla({tareas, onEdit}) {
   return (
@@ -772,9 +889,9 @@ function ViewTabla({tareas, onEdit}) {
     </div>
   );
 }
-
+ 
 // App Principal
-function App() {
+export default function App() {
   const [tareas, setTareasRaw] = useState(() => { const d=loadData(); return d?d.tareas:INIT_TAREAS; });
   const [pros, setPros]   = useState(() => { const d=loadData(); return d&&d.pros?d.pros:INIT_PROS; });
   const [horas, setHoras] = useState(() => { const d=loadData(); return d&&d.horas?d.horas:HORAS_DEF; });
@@ -791,7 +908,7 @@ function App() {
   const [w, setW]         = useState(window.innerWidth);
   const [syncMsg, setSyncMsg]         = useState("");
   const [storageSource, setStorageSource] = useState("local");
-
+ 
   function forzarSync() {
     setSyncMsg("Conectando...");
     const binId = getBinId();
@@ -813,7 +930,7 @@ function App() {
       }
     }).catch(e => setSyncMsg("Error: " + e.message));
   }
-
+ 
   useEffect(()=>{
     const fn=()=>setW(window.innerWidth);
     window.addEventListener("resize",fn);
@@ -829,17 +946,17 @@ function App() {
     return()=>window.removeEventListener("resize",fn);
   },[]);
   const mob = w < 768;
-
+ 
   function persist(t2,p2,h2){ saveData(t2??tareas,h2??horas,p2??pros); setSaved(true); setTimeout(()=>setSaved(false),2000); }
   function setTs(fn){ setTareasRaw(prev=>{ const n=typeof fn==="function"?fn(prev):fn; persist(n,null,null); return n; }); }
   function setHrs(fn){ setHoras(prev=>{ const n=typeof fn==="function"?fn(prev):fn; persist(null,null,n); return n; }); }
-
+ 
   function addT(t){ setTs(p=>[...p,t]); setNtCtx(null); }
   function addP(f){
     const n=f.nombre.trim().toUpperCase();
     const np=[...pros,n];
     setPros(np);
-    setTs(prev=>[...prev,{id:Date.now(),mandante:f.mandante,proyecto:n,jefe:f.jefe,tarea:"— Sin tareas —",encargado:f.jefe,estado:"Pendiente Inicio",horasProg:0,horasEjec:0,plazo:0,pendientes:"",inicioDate:new Date(),comprometidaDate:null,entregaDate:null,pct:0}]);
+    setTs(prev=>[...prev,{id:Date.now(),mandante:f.mandante,proyecto:n,jefe:f.jefe,tarea:"— Sin tareas —",encargado:f.jefe,estado:"Pendiente Inicio",horasProg:0,horasEjec:0,plazo:0,pendientes:"",colaboradores:[],inicioDate:new Date(),comprometidaDate:null,entregaDate:null,pct:0}]);
     setNpOpen(false);
     persist(null,np,null);
   }
@@ -865,7 +982,7 @@ function App() {
     saveData(INIT_TAREAS,HORAS_DEF,INIT_PROS);
     setTareasRaw(INIT_TAREAS); setPros(INIT_PROS); setHoras(HORAS_DEF);
   }
-
+ 
   const mandantes = useMemo(()=>[...new Set(tareas.map(t=>t.mandante))].sort(),[tareas]);
   const etapas    = useMemo(()=>[...new Set(tareas.map(t=>t.tarea.split(" ")[0]))].sort(),[tareas]);
   const filtradas = useMemo(()=>tareas.filter(t=>{
@@ -876,20 +993,20 @@ function App() {
     if(fEta!=="Todas"&&!t.tarea.startsWith(fEta))return false;
     return true;
   }),[tareas,fMan,fArq,fEst,fPro,fEta]);
-
+ 
   const kpis = useMemo(()=>{
-    const crit=tareas.filter(t=>{const d=dd(t.comprometidaDate);return d!==null&&d<7&&t.estado!=="Completado";}).length;
-    const prox=tareas.filter(t=>{const d=dd(t.comprometidaDate);return d!==null&&d>=7&&d<14&&t.estado!=="Completado";}).length;
+    const crit=tareas.filter(esCritica).length;
+    const prox=0; // ya no se usa con nuevo criterio
     const venc=tareas.filter(t=>t.estado!=="Completado"&&t.comprometidaDate).map(t=>({...t,dv:dd(t.comprometidaDate)})).sort((a,b)=>a.dv-b.dv)[0]??null;
     const atras=[...new Set(tareas.filter(t=>t.estado!=="Completado").map(t=>t.proyecto))].map(p=>{const ts=tareas.filter(t=>t.proyecto===p&&t.estado!=="Completado");return{p,pct:ts.reduce((s,t)=>s+t.pct,0)/ts.length};}).sort((a,b)=>a.pct-b.pct)[0]??null;
     return{total:tareas.length,crit,prox,venc,atras};
   },[tareas]);
-
+ 
   const btnS = active => ({background:active?"#6366f1":"transparent",border:active?"none":"1px solid #334155",borderRadius:6,padding:mob?"5px 10px":"6px 14px",color:active?"#fff":"#94a3b8",cursor:"pointer",fontSize:mob?11:12,fontWeight:active?600:400,whiteSpace:"nowrap"});
-
+ 
   return (
     <div style={{minHeight:"100vh",background:"#060f1e",color:"#e2e8f0",fontFamily:"'DM Sans','Segoe UI',system-ui,sans-serif"}}>
-
+ 
       {/* Header */}
       <div style={{background:"#0a1628",borderBottom:"1px solid #1e293b",padding:mob?"10px 14px":"14px 20px",display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:8}}>
         <div>
@@ -911,14 +1028,14 @@ function App() {
           {!mob&&<div style={{fontSize:10,color:"#475569"}}>{new Date().toLocaleDateString("es-CL",{weekday:"long",day:"numeric",month:"long"})}</div>}
         </div>
       </div>
-
+ 
       {/* KPIs */}
       <div style={{display:"flex",overflowX:"auto",gap:1,background:"#1e293b",borderBottom:"1px solid #1e293b",scrollbarWidth:"none"}}>
         {[
           {l:"Proyectos",v:pros.length,c:"#6366f1"},
           {l:"Tareas",v:kpis.total,c:"#94a3b8"},
-          {l:"Esta semana",v:kpis.crit,c:"#ef4444"},
-          {l:"2 semanas",v:kpis.prox,c:"#f59e0b"},
+          {l:"Críticas",v:kpis.crit,c:"#ef4444"},
+          {l:"Vencidas",v:tareas.filter(t=>t.estado!=="Completado"&&t.comprometidaDate&&dd(t.comprometidaDate)<0).length,c:"#f43f5e"},
         ].map(k=>(
           <div key={k.l} style={{background:"#0a1628",padding:"10px 14px",textAlign:"center",flexShrink:0,minWidth:72}}>
             <div style={{fontSize:20,fontWeight:800,color:k.c}}>{k.v}</div>
@@ -936,7 +1053,7 @@ function App() {
           {kpis.atras&&<div style={{fontSize:8,color:"#f43f5e",fontWeight:600,marginTop:1}}>{kpis.atras.p}</div>}
         </div>
       </div>
-
+ 
       {/* Toolbar */}
       <div style={{background:"#0a1628",borderBottom:"1px solid #1e293b"}}>
         <div style={{display:"flex",gap:4,padding:mob?"8px 12px":"10px 18px",overflowX:"auto",scrollbarWidth:"none",alignItems:"center"}}>
@@ -973,7 +1090,7 @@ function App() {
           </select>
         </div>
       </div>
-
+ 
       {/* Contenido */}
       <div style={{padding:mob?10:18}}>
         {vista==="proyectos"     &&<ViewProyectos tareas={filtradas} pros={pros.filter(p=>filtradas.some(t=>t.proyecto===p))} onEdit={setEdit} onAddTarea={setNtCtx} onDelProyecto={delP}/>}
@@ -982,19 +1099,13 @@ function App() {
         {vista==="disponibilidad"&&<ViewDisponibilidad tareas={tareas} horas={horas} onUpdateHoras={(a,v)=>setHrs(p=>({...p,[a]:v}))}/>}
         {vista==="tabla"         &&<ViewTabla tareas={filtradas} onEdit={setEdit}/>}
       </div>
-
+ 
       {/* Modales */}
       {edit   &&<ModalEditar tarea={edit} onSave={saveT} onClose={()=>setEdit(null)} onDelete={delT}/>}
       {ntCtx  &&<ModalNuevaTarea proyectoCtx={ntCtx} onSave={addT} onClose={()=>setNtCtx(null)}/>}
       {npOpen &&<ModalNuevoProyecto onSave={addP} onClose={()=>setNpOpen(false)}/>}
-
+ 
       <style>{`*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}::-webkit-scrollbar{width:4px;height:4px;}::-webkit-scrollbar-thumb{background:#334155;border-radius:3px;}`}</style>
     </div>
   );
 }
-
-    const root = ReactDOM.createRoot(document.getElementById('root'));
-    root.render(<App />);
-  </script>
-</body>
-</html>
