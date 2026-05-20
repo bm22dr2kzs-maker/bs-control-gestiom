@@ -675,10 +675,12 @@ function ViewCarga({tareas}) {
     const crit=ts.filter(esCritica);
     const h30=semanas.map(({ini,fin})=>{
       let h=0;
+      const hoy = new Date(); hoy.setHours(0,0,0,0);
       // Como responsable
       ts.filter(t=>t.estado!=="Completado").forEach(t=>{
-        const tI=t.inicioDate??ini,tF=t.entregaDate??t.comprometidaDate;
+        const tF=t.entregaDate??t.comprometidaDate;
         if(!tF)return;
+        const tI=new Date(Math.max(hoy,t.inicioDate??hoy));
         const colPct=(t.colaboradores||[]).reduce((s,c)=>s+(+c.pct||0),0);
         const respPct=Math.max(0,100-colPct)/100;
         const hp=Math.max(0,t.horasProg-t.horasEjec)*respPct;
@@ -692,8 +694,9 @@ function ViewCarga({tareas}) {
       tsColab.filter(t=>t.estado!=="Completado").forEach(t=>{
         const col=(t.colaboradores||[]).find(c=>c.arq===arq);
         if(!col)return;
-        const tI=t.inicioDate??ini,tF=t.entregaDate??t.comprometidaDate;
+        const tF=t.entregaDate??t.comprometidaDate;
         if(!tF)return;
+        const tI=new Date(Math.max(hoy,t.inicioDate??hoy));
         const hp=Math.max(0,t.horasProg-t.horasEjec)*(+col.pct||0)/100;
         if(!hp)return;
         const dur=Math.max(1,Math.round((tF-tI)/86400000));
@@ -795,10 +798,12 @@ function ViewDisponibilidad({tareas, horas, onUpdateHoras}) {
     const todasTs=[...ts,...tsColab];
     const hSem=semanas.map(({ini,fin})=>{
       let h=0;
+      const hoy = new Date(); hoy.setHours(0,0,0,0);
       // Como responsable (descontando % de colaboradores)
       ts.forEach(t=>{
-        const tI=t.inicioDate??ini,tF=t.entregaDate??t.comprometidaDate;
+        const tF=t.entregaDate??t.comprometidaDate;
         if(!tF)return;
+        const tI=new Date(Math.max(hoy,t.inicioDate??hoy)); // desde hoy o inicio si es futuro
         const colPct=(t.colaboradores||[]).reduce((s,c)=>s+(+c.pct||0),0);
         const respPct=Math.max(0,100-colPct)/100;
         const hp=Math.max(0,t.horasProg-t.horasEjec)*respPct;
@@ -812,8 +817,9 @@ function ViewDisponibilidad({tareas, horas, onUpdateHoras}) {
       tsColab.forEach(t=>{
         const col=(t.colaboradores||[]).find(c=>c.arq===arq);
         if(!col)return;
-        const tI=t.inicioDate??ini,tF=t.entregaDate??t.comprometidaDate;
+        const tF=t.entregaDate??t.comprometidaDate;
         if(!tF)return;
+        const tI=new Date(Math.max(hoy,t.inicioDate??hoy));
         const hp=Math.max(0,t.horasProg-t.horasEjec)*(+col.pct||0)/100;
         if(!hp)return;
         const dur=Math.max(1,Math.round((tF-tI)/86400000));
