@@ -985,14 +985,16 @@ function App() {
   }
   function saveT(upd){
     const old=edit.proyecto, nw=upd.proyecto;
-    setTs(prev=>{
-      const nx=prev.map(t=>t.id===upd.id?upd:t);
-      if(old!==nw){
+    if(old!==nw){
+      setTs(prev=>{
+        const nx=prev.map(t=>t.id===upd.id?upd:t);
         const stays=nx.some(t=>t.proyecto===old);
         setPros(pp=>{ const np=stays?pp:[...pp.filter(x=>x!==old)]; if(!np.includes(nw))np.push(nw); persist(nx,np,null); return np; });
-      }
-      return nx;
-    });
+        return nx;
+      });
+    } else {
+      setTs(prev=>prev.map(t=>t.id===upd.id?upd:t));
+    }
     setEdit(null);
   }
   function delT(id){ setTs(p=>p.filter(t=>t.id!==id)); setEdit(null); }
@@ -1009,13 +1011,13 @@ function App() {
   const mandantes = useMemo(()=>[...new Set(tareas.map(t=>t.mandante))].sort(),[tareas]);
   const etapas    = useMemo(()=>[...new Set(tareas.map(t=>t.tarea.split(" ")[0]))].sort(),[tareas]);
   const filtradas = useMemo(()=>tareas.filter(t=>{
-    if(fMan!=="Todos"&&t.mandante!==fMan)return false;
+    if((vista==="proyectos"||vista==="gantt")&&fMan!=="Todos"&&t.mandante!==fMan)return false;
     if(fArq!=="Todos"&&t.encargado!==fArq)return false;
     if(fEst!=="Todos"&&t.estado!==fEst)return false;
     if(fPro!=="Todos"&&t.proyecto!==fPro)return false;
     if(fEta!=="Todas"&&!t.tarea.startsWith(fEta))return false;
     return true;
-  }),[tareas,fMan,fArq,fEst,fPro,fEta]);
+  }),[tareas,vista,fMan,fArq,fEst,fPro,fEta]);
  
   const kpis = useMemo(()=>{
     const crit=tareas.filter(esCritica).length;
