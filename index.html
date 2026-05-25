@@ -140,9 +140,11 @@ const INIT_TAREAS = RAW.map(r => ({
 }));
 const INIT_PROS = [...new Set(INIT_TAREAS.map(t => t.proyecto))];
  
-// Storage — JSONBin (cloud, cross-device) + localStorage fallback
-const JKEY = "$2a$10$N7WPX6xsFFXM03.pFWMIE.R3UaX.Z2ewfNQWSEU8lcQNvyWmQwvqW";
-const BIN_ID_KEY = SK + "_bid";
+// Storage — Supabase (cloud, cross-device) + localStorage fallback
+const SUPA_URL = "https://jhbhhyeysrprvvurylgv.supabase.co";
+const SUPA_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpoYmhoeWV5c3JwcnZ2dXJ5bGd2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3Mzc3MDEsImV4cCI6MjA5NTMxMzcwMX0.t-Butq0BzSoy1OVIqox_WON55SW5eddcdswFBorPEHE";
+const SUPA_HEADERS = {"Content-Type":"application/json","apikey":SUPA_KEY,"Authorization":`Bearer ${SUPA_KEY}`};
+const SUPA_ROW_KEY = "bs_control_v1";
  
 function serialize(tareas) {
   return tareas.map(t => ({...t,
@@ -158,23 +160,33 @@ function deserialize(tareas) {
     entregaDate: t.entregaDate ? new Date(t.entregaDate) : null,
   }));
 }
-function getBinId() { try { return localStorage.getItem(BIN_ID_KEY) || "6a0ce86a6877513b279d45a4"; } catch(e) { return "6a0ce86a6877513b279d45a4"; } }
-function setBinId(id) { try { localStorage.setItem(BIN_ID_KEY, id); } catch(e) {} }
+function getBinId() { return null; }
+function setBinId(id) {}
  
 function saveData(tareas, horas, pros) {
   const body = JSON.stringify({ tareas: serialize(tareas), horas, pros, ts: new Date().toISOString() });
+  // localStorage inmediato
   try { localStorage.setItem(SK, body); } catch(e) {}
-  const binId = getBinId();
-  if (binId) {
-    fetch(`https://api.jsonbin.io/v3/b/${binId}`, {
-      method: "PUT", headers: { "Content-Type": "application/json", "X-Master-Key": JKEY }, body
-    }).catch(() => {});
-  } else {
-    fetch("https://api.jsonbin.io/v3/b", {
-      method: "POST", headers: { "Content-Type": "application/json", "X-Master-Key": JKEY, "X-Bin-Name": "BS_Control", "X-Bin-Private": "true" }, body
-    }).then(r => r.json()).then(d => { if (d.metadata?.id) setBinId(d.metadata.id); }).catch(() => {});
-  }
+  // Supabase en segundo plano
+  fetch(`${SUPA_URL}/rest/v1/control_gestion?key=eq.${SUPA_ROW_KEY}`, {
+    method: "GET", headers: SUPA_HEADERS
+  }).then(r=>r.json()).then(rows=>{
+    if (rows && rows.length > 0) {
+      // UPDATE
+      fetch(`${SUPA_URL}/rest/v1/control_gestion?key=eq.${SUPA_ROW_KEY}`, {
+        method: "PATCH", headers: {...SUPA_HEADERS,"Prefer":"return=minimal"},
+        body: JSON.stringify({value: body})
+      }).catch(()=>{});
+    } else {
+      // INSERT
+      fetch(`${SUPA_URL}/rest/v1/control_gestion`, {
+        method: "POST", headers: {...SUPA_HEADERS,"Prefer":"return=minimal"},
+        body: JSON.stringify({key: SUPA_ROW_KEY, value: body})
+      }).catch(()=>{});
+    }
+  }).catch(()=>{});
 }
+ 
 function loadData() {
   try {
     const raw = localStorage.getItem(SK);
@@ -182,19 +194,17 @@ function loadData() {
   } catch(e) {}
   return null;
 }
+ 
 function loadCloudData(onLoaded) {
-  const binId = getBinId();
-  fetchBin(binId, onLoaded);
-}
-function fetchBin(binId, onLoaded) {
-  fetch(`https://api.jsonbin.io/v3/b/${binId}/latest`, {
-    headers: { "X-Master-Key": JKEY }
-  }).then(r => r.json()).then(d => {
-    if (d.record?.tareas) {
-      d.record.tareas = deserialize(d.record.tareas);
-      onLoaded(d.record);
+  fetch(`${SUPA_URL}/rest/v1/control_gestion?key=eq.${SUPA_ROW_KEY}&select=value`, {
+    headers: SUPA_HEADERS
+  }).then(r=>r.json()).then(rows=>{
+    if (rows && rows.length > 0 && rows[0].value) {
+      const d = JSON.parse(rows[0].value);
+      d.tareas = deserialize(d.tareas);
+      onLoaded(d);
     }
-  }).catch(() => {});
+  }).catch(()=>{});
 }
  
  
@@ -1081,22 +1091,24 @@ function App() {
  
   function forzarSync() {
     setSyncMsg("Conectando...");
-    const binId = getBinId();
-    fetch(`https://api.jsonbin.io/v3/b/${binId}/latest`, {
-      headers: { "X-Master-Key": JKEY }
+    fetch(`${SUPA_URL}/rest/v1/control_gestion?key=eq.${SUPA_ROW_KEY}&select=value`, {
+      headers: SUPA_HEADERS
     }).then(r => {
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       return r.json();
-    }).then(d => {
-      if (d.record?.tareas) {
-        d.record.tareas = deserialize(d.record.tareas);
-        if (d.record.pros) setPros(d.record.pros);
-        if (d.record.horas) setHoras(d.record.horas);
-        setTareasRaw(d.record.tareas);
+    }).then(rows => {
+      if (rows && rows.length > 0 && rows[0].value) {
+        const d = JSON.parse(rows[0].value);
+        d.tareas = deserialize(d.tareas);
+        if (d.pros) setPros(d.pros);
+        if (d.horas) setHoras(d.horas);
+        setTareasRaw(d.tareas);
         setStorageSource("cloud");
-        setSyncMsg("✓ Sincronizado desde la nube");
+        setSyncMsg("✓ Sincronizado desde Supabase");
       } else {
-        setSyncMsg("Sin datos en la nube aún");
+        // Sin datos en Supabase aún — guardar los actuales
+        saveData(tareas, horas, pros);
+        setSyncMsg("✓ Datos subidos a Supabase");
       }
     }).catch(e => setSyncMsg("Error: " + e.message));
   }
