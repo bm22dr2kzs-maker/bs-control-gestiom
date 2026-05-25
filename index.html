@@ -94,12 +94,47 @@ const RAW = [
   {id:43,m:"Inmobiliaria ICICLOS",p:"ICICLOS LOS SUSPIROS",j:"Fernanda Jimenez",t:"DOM MP",e:"Fernanda Jimenez",s:"Pendiente Inicio",hp:120,he:0,i:46143,pl:60,c:46203,pe:""},
   {id:44,m:"Inmobiliaria ICICLOS",p:"ICICLOS LOS SUSPIROS",j:"Fernanda Jimenez",t:"ARQ Detalles",e:"Fernanda Jimenez",s:"Pendiente Inicio",hp:300,he:0,i:46174,pl:180,c:46354,pe:""},
   {id:45,m:"Inmobiliaria ICICLOS",p:"ICICLOS LOS SUSPIROS",j:"Juan Pablo Badia",t:"ARQ EETT",e:"Juan Pablo Badia",s:"Pendiente Inicio",hp:30,he:0,i:46204,pl:30,c:46234,pe:""},
+  // PY QUINTA LINDEROS 3A
+  {id:46,m:"Inmobiliaria PY",p:"PY QUINTA LINDEROS 3A",j:"Fernanda Jimenez",t:"DOM RF",e:"Fernanda Jimenez",s:"Pendiente Inicio",hp:40,he:0,i:46173,pl:30,c:46203,pe:""},
+  {id:47,m:"Inmobiliaria PY",p:"PY QUINTA LINDEROS 3A",j:"Fernanda Jimenez",t:"OBRA Supervisión",e:"Juan Pablo Badia",s:"Iniciado",hp:40,he:0,i:46156,pl:180,c:46336,pe:""},
+  // PY QUINTA LINDEROS 3B
+  {id:48,m:"Inmobiliaria PY",p:"PY QUINTA LINDEROS 3B",j:"Fernanda Jimenez",t:"DOM MP",e:"Fernanda Jimenez",s:"Pendiente Inicio",hp:40,he:0,i:46173,pl:30,c:46203,pe:""},
+  {id:49,m:"Inmobiliaria PY",p:"PY QUINTA LINDEROS 3B",j:"Fernanda Jimenez",t:"ARQ Venta",e:"Fernanda Jimenez",s:"Pendiente Inicio",hp:40,he:0,i:46173,pl:30,c:46205,pe:""},
+  {id:50,m:"Inmobiliaria PY",p:"PY QUINTA LINDEROS 3B",j:"Fernanda Jimenez",t:"OBRA RDI",e:"Fernanda Jimenez",s:"Pendiente Inicio",hp:40,he:0,i:46173,pl:150,c:46323,pe:""},
+  {id:51,m:"Inmobiliaria PY",p:"PY QUINTA LINDEROS 3B",j:"Fernanda Jimenez",t:"OBRA Supervisión",e:"Juan Pablo Badia",s:"Pendiente Inicio",hp:40,he:0,i:46173,pl:150,c:46323,pe:""},
+  // PY QUINTA LINDEROS L2
+  {id:52,m:"Inmobiliaria PY",p:"PY QUINTA LINDEROS L2",j:"Fernanda Jimenez",t:"DOM MP",e:"Fernanda Jimenez",s:"Pendiente Inicio",hp:40,he:0,i:46173,pl:30,c:46203,pe:""},
+  // PY RUKAN C5
+  {id:53,m:"Inmobiliaria PY",p:"PY RUKAN C5",j:"Fernanda Jimenez",t:"ARQ Cabida",e:"Fernanda Jimenez",s:"Pendiente Inicio",hp:40,he:0,i:46156,pl:30,c:46186,pe:""},
 ];
+ 
+// Colaboradores de tareas existentes (extraídos de capturas)
+const COLABS = {
+  // SECURITY LO MATTA
+  1:  [{arq:"Felipe Soffia",pct:20}], // DOM RF
+  // PY AYSEN
+  4:  [{arq:"Marco Aguirre",pct:20},{arq:"Felipe Soffia",pct:5}], // DOM MP
+  6:  [{arq:"Felipe Soffia",pct:10}], // ARQ Detalles (Victor encargado)
+  7:  [{arq:"Felipe Soffia",pct:10}], // ARQ Coordinación
+  // EI STA ROSA
+  10: [{arq:"Felipe Soffia",pct:5}],  // ARQ Detalles
+  // SECURITY VDG
+  13: [{arq:"Felipe Soffia",pct:10}], // ARQ Coordinación
+  14: [{arq:"Felipe Soffia",pct:10}], // OBRA RDI
+  15: [{arq:"Felipe Soffia",pct:10}], // DOM MP
+  // SECURITY O2
+  16: [{arq:"Felipe Soffia",pct:10}], // OBRA RDI
+  18: [{arq:"Felipe Soffia",pct:10}], // DOM Copropiedad
+  19: [{arq:"Felipe Soffia",pct:10}], // DOM RF
+  // PY LOS TOROS
+  20: [{arq:"Felipe Soffia",pct:10}], // ARQ Básica
+  21: [{arq:"Felipe Soffia",pct:10}], // ARQ Coordinación
+};
  
 const INIT_TAREAS = RAW.map(r => ({
   id:r.id, mandante:r.m, proyecto:r.p, jefe:r.j, tarea:r.t, encargado:r.e,
   estado:r.s, horasProg:r.hp, horasEjec:r.he, plazo:r.pl, pendientes:r.pe,
-  colaboradores: [], // [{arq, pct}] hasta 2
+  colaboradores: COLABS[r.id] || [],
   inicioDate:xd(r.i), comprometidaDate:xd(r.c), entregaDate:ad(xd(r.i),r.pl),
   pct:EP[r.s]||0
 }));
@@ -780,26 +815,29 @@ function ViewCarga({tareas}) {
                 const hoy2 = new Date(); hoy2.setHours(0,0,0,0);
                 const esColaborador = t.encargado !== arq;
                 const col = esColaborador ? (t.colaboradores||[]).find(c=>c.arq===arq) : null;
-                const hSemTarea = semanas.map(({ini,fin})=>{
-                  const tF=t.entregaDate??t.comprometidaDate;
-                  if(!tF) return 0;
-                  const tI=new Date(Math.max(hoy2,t.inicioDate??hoy2));
-                  let pctArq;
-                  if(esColaborador){
-                    pctArq=(+col?.pct||0)/100;
-                  } else {
-                    const colPct=(t.colaboradores||[]).reduce((s,c)=>s+(+c.pct||0),0);
-                    pctArq=Math.max(0,100-colPct)/100;
-                  }
-                  const hp=Math.max(0,t.horasProg-t.horasEjec)*pctArq;
-                  if(!hp) return 0;
-                  const dur=Math.max(1,Math.round((tF-tI)/86400000));
+                let pctArq;
+                if(esColaborador){
+                  pctArq=(+col?.pct||0)/100;
+                } else {
+                  const colPct=(t.colaboradores||[]).reduce((s,c)=>s+(+c.pct||0),0);
+                  pctArq=Math.max(0,100-colPct)/100;
+                }
+                const hpTotal=Math.max(0,t.horasProg-t.horasEjec)*pctArq;
+                if(!hpTotal) return null;
+                const tF=t.entregaDate??t.comprometidaDate;
+                if(!tF) return null;
+                const tI=new Date(Math.max(hoy2,t.inicioDate??hoy2));
+                const durTotal=Math.max(1,Math.round((tF-tI)/86400000));
+                // Calcular días overlap por semana (sin redondear)
+                const diasSem=semanas.map(({ini,fin})=>{
                   const oI=new Date(Math.max(tI,ini)),oF=new Date(Math.min(tF,fin));
-                  const od=Math.max(0,Math.round((oF-oI)/86400000)+1);
-                  return Math.round(hp*(od/dur)*10)/10;
+                  return Math.max(0,Math.round((oF-oI)/86400000)+1);
                 });
-                const totalTarea = hSemTarea.reduce((s,h)=>s+h,0);
-                if(totalTarea===0) return null;
+                const diasTotalesCubiertos=diasSem.reduce((s,d)=>s+d,0);
+                // Distribuir horas exactas proporcionalmente a los días
+                const hSemTarea=diasSem.map(d=>diasTotalesCubiertos>0?hpTotal*(d/durTotal):0);
+                const totalTarea=hSemTarea.reduce((s,h)=>s+h,0);
+                if(totalTarea<0.1) return null;
                 return (
                   <div key={t.id} style={{display:"grid",gridTemplateColumns:"1fr repeat(4,36px)",gap:3,marginBottom:3,padding:"3px 0",borderTop:"1px solid #1e293b"}}>
                     <div style={{overflow:"hidden"}}>
@@ -812,9 +850,9 @@ function ViewCarga({tareas}) {
                     </div>
                     {hSemTarea.map((h,i)=>(
                       <div key={i} style={{textAlign:"center",fontSize:9,
-                        color:h>0?(i===0?"#6366f1":"#94a3b8"):"#1e293b",
-                        fontWeight:h>0&&i===0?700:400}}>
-                        {h>0?`${h}h`:"—"}
+                        color:h>0.05?(i===0?"#6366f1":"#94a3b8"):"#1e293b",
+                        fontWeight:h>0.05&&i===0?700:400}}>
+                        {h>0.05?`${Math.round(h)}h`:"—"}
                       </div>
                     ))}
                   </div>
