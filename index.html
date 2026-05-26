@@ -257,7 +257,7 @@ function ModalEditar({tarea, onSave, onClose, onDelete}) {
     });
   }
   function addColab() {
-    if (f.colaboradores.length >= 2) return;
+    if (f.colaboradores.length >= 4) return;
     // Default pct: split remaining evenly
     const used = f.colaboradores.reduce((s,c)=>s+c.pct,0);
     const avail = Math.max(0, 100 - used);
