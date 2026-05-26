@@ -135,10 +135,25 @@ const INIT_TAREAS = RAW.map(r => ({
   id:r.id, mandante:r.m, proyecto:r.p, jefe:r.j, tarea:r.t, encargado:r.e,
   estado:r.s, horasProg:r.hp, horasEjec:r.he, plazo:r.pl, pendientes:r.pe,
   colaboradores: COLABS[r.id] || [],
+  horasSemana: {}, // {arq: {semKey: horas}} — horas manuales por arquitecto por semana
   inicioDate:xd(r.i), comprometidaDate:xd(r.c), entregaDate:ad(xd(r.i),r.pl),
   pct:EP[r.s]||0
 }));
 const INIT_PROS = [...new Set(INIT_TAREAS.map(t => t.proyecto))];
+ 
+// Genera las próximas 4 semanas con clave YYYY-WW
+function getSemanas4() {
+  const hoy = new Date(); hoy.setHours(0,0,0,0);
+  const diaSem = hoy.getDay()===0?6:hoy.getDay()-1;
+  const lunes = new Date(hoy); lunes.setDate(hoy.getDate()-diaSem);
+  return Array.from({length:4},(_,i)=>{
+    const ini = new Date(lunes); ini.setDate(lunes.getDate()+i*7);
+    const fin = new Date(ini); fin.setDate(ini.getDate()+6);
+    const key = `${ini.getFullYear()}-W${String(Math.ceil((ini.getDate()-ini.getDay()+1)/7)).padStart(2,"0")}`;
+    const label = `${ini.toLocaleDateString("es-CL",{day:"2-digit",month:"short"})}–${fin.toLocaleDateString("es-CL",{day:"2-digit",month:"short"})}`;
+    return {ini, fin, key, label};
+  });
+}
  
 // Storage — Supabase (cloud, cross-device) + localStorage fallback
 const SUPA_URL = "https://jhbhhyeysrprvvurylgv.supabase.co";
@@ -237,12 +252,14 @@ const SEL_STYLE = {background:"#0f172a",border:"1px solid #1e293b",borderRadius:
  
 // Edit Modal
 function ModalEditar({tarea, onSave, onClose, onDelete}) {
+  const semanas4 = getSemanas4();
   const [f, setF] = useState({
     proyecto: tarea.proyecto, mandante: tarea.mandante,
     jefe: tarea.jefe, encargado: tarea.encargado, estado: tarea.estado,
     horasProg: tarea.horasProg, horasEjec: tarea.horasEjec, plazo: tarea.plazo,
     pendientes: tarea.pendientes,
     colaboradores: tarea.colaboradores || [],
+    horasSemana: tarea.horasSemana || {},
     inicioStr: tarea.inicioDate ? tarea.inicioDate.toISOString().slice(0,10) : "",
     comprStr:  tarea.comprometidaDate ? tarea.comprometidaDate.toISOString().slice(0,10) : "",
   });
@@ -281,9 +298,33 @@ function ModalEditar({tarea, onSave, onClose, onDelete}) {
     onSave({...tarea, proyecto:f.proyecto.trim().toUpperCase(), mandante:f.mandante.trim(),
       jefe:f.jefe, encargado:f.encargado, estado:f.estado,
       horasProg:+f.horasProg, horasEjec:+f.horasEjec, plazo:+f.plazo,
-      pendientes:f.pendientes, colaboradores:f.colaboradores,
+      pendientes:f.pendientes, colaboradores:f.colaboradores, horasSemana:f.horasSemana,
       inicioDate:ini, comprometidaDate:com,
       entregaDate:ad(ini,+f.plazo), pct:EP[f.estado]||0});
+  }
+ 
+  function setHoraSem(arq, semKey, val) {
+    setF(p => ({
+      ...p,
+      horasSemana: {
+        ...p.horasSemana,
+        [arq]: {...(p.horasSemana[arq]||{}), [semKey]: +val||0}
+      }
+    }));
+  }
+ 
+  // Calcular horas manuales totales por arquitecto en las 4 semanas
+  function horasManualesArq(arq) {
+    return semanas4.reduce((s,sem)=>{
+      return s + ((f.horasSemana[arq]||{})[sem.key]||0);
+    },0);
+  }
+  // Horas pendientes totales por arquitecto (para mostrar restantes)
+  function horasPendientesArq(arq) {
+    const esResp = arq === f.encargado;
+    const colPct = f.colaboradores.reduce((s,c)=>s+(+c.pct||0),0);
+    const pctArq = esResp ? Math.max(0,100-colPct)/100 : ((f.colaboradores.find(c=>c.arq===arq)?.pct||0)/100);
+    return Math.max(0, (+f.horasProg - +f.horasEjec) * pctArq);
   }
  
   return (
@@ -403,7 +444,59 @@ function ModalEditar({tarea, onSave, onClose, onDelete}) {
             <span style={{fontSize:9,color:"#64748b",textTransform:"uppercase",letterSpacing:1}}>Actividades pendientes</span>
             <textarea value={f.pendientes} onChange={e=>set("pendientes",e.target.value)} rows={2} style={{...INP,resize:"vertical"}}/>
           </label>
-        </div>
+ 
+          {/* Horas semanales por arquitecto */}
+          <div style={{background:"#0a1628",borderRadius:8,padding:10,border:"1px solid #1e293b"}}>
+            <div style={{fontSize:9,color:"#64748b",textTransform:"uppercase",letterSpacing:1,marginBottom:8}}>
+              Horas planificadas próximas 4 semanas
+            </div>
+            {/* Header semanas */}
+            <div style={{display:"grid",gridTemplateColumns:"1fr repeat(4,52px)",gap:4,marginBottom:6}}>
+              <div style={{fontSize:8,color:"#475569"}}>Arquitecto</div>
+              {semanas4.map((s,i)=>(
+                <div key={i} style={{fontSize:8,color:i===0?"#6366f1":"#475569",textAlign:"center",fontWeight:i===0?700:400}}>
+                  {s.label}
+                </div>
+              ))}
+            </div>
+            {/* Fila por arquitecto */}
+            {[f.encargado, ...f.colaboradores.map(c=>c.arq)].map((arq,idx)=>{
+              const hPend = horasPendientesArq(arq);
+              const hMan  = horasManualesArq(arq);
+              const hRest = Math.max(0, hPend - hMan);
+              const esResp = idx === 0;
+              return (
+                <div key={arq} style={{marginBottom:6}}>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr repeat(4,52px)",gap:4,alignItems:"center"}}>
+                    <div>
+                      <div style={{fontSize:9,color:esResp?"#6366f1":"#f59e0b",fontWeight:600,overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis"}}>
+                        {arq.split(" ")[0]}
+                      </div>
+                      <div style={{fontSize:8,color:"#475569"}}>{Math.round(hPend)}h pend.</div>
+                    </div>
+                    {semanas4.map((sem,i)=>(
+                      <input key={i} type="number" min={0}
+                        value={(f.horasSemana[arq]||{})[sem.key]||""}
+                        onChange={e=>setHoraSem(arq,sem.key,e.target.value)}
+                        placeholder="0"
+                        style={{...INP,padding:"4px 6px",fontSize:11,textAlign:"center",
+                          borderColor:i===0?"#6366f133":"#334155"}}/>
+                    ))}
+                  </div>
+                  {/* Barra visual */}
+                  <div style={{marginTop:3,background:"#1e293b",borderRadius:99,height:3,overflow:"hidden"}}>
+                    <div style={{display:"flex",height:"100%"}}>
+                      <div style={{width:`${Math.min(100,hPend>0?hMan/hPend*100:0)}%`,background:esResp?"#6366f1":"#f59e0b"}}/>
+                      <div style={{width:`${Math.min(100,hPend>0?hRest/hPend*100:0)}%`,background:"#1e3a5f"}}/>
+                    </div>
+                  </div>
+                  <div style={{fontSize:8,color:"#475569",marginTop:1,textAlign:"right"}}>
+                    {Math.round(hMan)}h asignadas · {Math.round(hRest)}h restantes distribuidas automáticamente
+                  </div>
+                </div>
+              );
+            })}
+          </div>
  
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:18,gap:8}}>
           {confirmDel ? (
@@ -438,7 +531,7 @@ function ModalNuevaTarea({proyectoCtx, onSave, onClose}) {
     const com = f.comprStr ? new Date(f.comprStr+"T12:00:00") : ad(ini,+f.plazo);
     onSave({id:Date.now(),mandante:proyectoCtx.mandante,proyecto:proyectoCtx.proyecto,jefe:proyectoCtx.jefe,
       tarea:f.tarea.trim(),encargado:f.encargado,estado:f.estado,horasProg:+f.horasProg,horasEjec:+f.horasEjec,
-      plazo:+f.plazo,pendientes:f.pendientes,colaboradores:[],inicioDate:ini,comprometidaDate:com,entregaDate:ad(ini,+f.plazo),pct:EP[f.estado]||0});
+      plazo:+f.plazo,pendientes:f.pendientes,colaboradores:[],horasSemana:{},inicioDate:ini,comprometidaDate:com,entregaDate:ad(ini,+f.plazo),pct:EP[f.estado]||0});
   }
   return (
     <div style={{position:"fixed",inset:0,background:"#000b",zIndex:999,display:"flex",alignItems:"center",justifyContent:"center",padding:12}}>
@@ -718,17 +811,31 @@ function ViewCarga({tareas}) {
     const hTot=ts.reduce((s,t)=>s+t.horasProg,0)+tsColab.reduce((s,t)=>s+Math.round(t.horasProg*((t.colaboradores||[]).find(c=>c.arq===arq)?.pct||0)/100),0);
     const hEjec=ts.reduce((s,t)=>s+t.horasEjec,0);
     const crit=ts.filter(esCritica);
-    const h30=semanas.map(({ini,fin})=>{
+    const h30=semanas.map(({ini,fin,label},si)=>{
       let h=0;
       const hoy = new Date(); hoy.setHours(0,0,0,0);
+      const semKey = `${ini.getFullYear()}-W${String(si+1).padStart(2,"0")}`;
+      // Calcular semKey real basado en fecha
+      const diaSem=ini.getDay()===0?6:ini.getDay()-1;
+      const lunes=new Date(ini);lunes.setDate(ini.getDate()-diaSem);
+      const semKeyReal=`${lunes.getFullYear()}-W${String(Math.ceil((lunes.getDate()-lunes.getDay()+1)/7)).padStart(2,"0")}`;
+ 
       // Como responsable
       ts.filter(t=>t.estado!=="Completado").forEach(t=>{
+        // Verificar si hay horas manuales para esta semana
+        const hManual=(t.horasSemana||{})[arq]?.[semKeyReal];
+        if(hManual!==undefined && hManual!==null){
+          h+=hManual;
+          return;
+        }
         const tF=t.entregaDate??t.comprometidaDate;
         if(!tF)return;
         const tI=new Date(Math.max(hoy,t.inicioDate??hoy));
         const colPct=(t.colaboradores||[]).reduce((s,c)=>s+(+c.pct||0),0);
         const respPct=Math.max(0,100-colPct)/100;
-        const hp=Math.max(0,t.horasProg-t.horasEjec)*respPct;
+        // Horas manuales totales del responsable en las 4 semanas
+        const hManTotal=Object.values((t.horasSemana||{})[arq]||{}).reduce((s,v)=>s+(+v||0),0);
+        const hp=Math.max(0,(Math.max(0,t.horasProg-t.horasEjec)*respPct)-hManTotal);
         if(!hp)return;
         const dur=Math.max(1,Math.round((tF-tI)/86400000));
         const oI=new Date(Math.max(tI,ini)),oF=new Date(Math.min(tF,fin));
@@ -739,10 +846,16 @@ function ViewCarga({tareas}) {
       tsColab.filter(t=>t.estado!=="Completado").forEach(t=>{
         const col=(t.colaboradores||[]).find(c=>c.arq===arq);
         if(!col)return;
+        const hManual=(t.horasSemana||{})[arq]?.[semKeyReal];
+        if(hManual!==undefined && hManual!==null){
+          h+=hManual;
+          return;
+        }
         const tF=t.entregaDate??t.comprometidaDate;
         if(!tF)return;
         const tI=new Date(Math.max(hoy,t.inicioDate??hoy));
-        const hp=Math.max(0,t.horasProg-t.horasEjec)*(+col.pct||0)/100;
+        const hManTotal=Object.values((t.horasSemana||{})[arq]||{}).reduce((s,v)=>s+(+v||0),0);
+        const hp=Math.max(0,(Math.max(0,t.horasProg-t.horasEjec)*(+col.pct||0)/100)-hManTotal);
         if(!hp)return;
         const dur=Math.max(1,Math.round((tF-tI)/86400000));
         const oI=new Date(Math.max(tI,ini)),oF=new Date(Math.min(tF,fin));
