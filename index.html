@@ -328,7 +328,7 @@ function ModalEditar({tarea, onSave, onClose, onDelete}) {
           <div style={{background:"#0a1628",borderRadius:8,padding:10,border:"1px solid #1e293b"}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
               <span style={{fontSize:9,color:"#64748b",textTransform:"uppercase",letterSpacing:1}}>Distribución de horas</span>
-              {f.colaboradores.length < 2 && (
+              {f.colaboradores.length < 4 && (
                 <button onClick={addColab} style={{background:"#6366f133",border:"1px solid #6366f144",borderRadius:4,padding:"2px 8px",color:"#818cf8",cursor:"pointer",fontSize:10}}>
                   + Colaborador
                 </button>
