@@ -1,17 +1,17 @@
 import { useState, useMemo, useEffect } from "react";
- 
+
 const ARQUITECTOS = ["Felipe Soffia","Fernanda Jimenez","Juan Pablo Badia","Marco Aguirre","Nicole Trepiana","Oscar Leiva","Valeria Carbonell","Victor Venegas"];
 const HORAS_DEF = {"Felipe Soffia":41,"Fernanda Jimenez":41,"Juan Pablo Badia":41,"Marco Aguirre":41,"Oscar Leiva":41,"Victor Venegas":41,"Valeria Carbonell":33,"Nicole Trepiana":33};
 const ESTADOS = ["Pendiente Inicio","Iniciado","En Progreso","Avanzado","Casi Terminado","Completado"];
 const EC = {"Pendiente Inicio":"#64748b","Iniciado":"#3b82f6","En Progreso":"#f59e0b","Avanzado":"#8b5cf6","Casi Terminado":"#10b981","Completado":"#059669"};
 const EP = {"Pendiente Inicio":0,"Iniciado":0.15,"En Progreso":0.38,"Avanzado":0.67,"Casi Terminado":0.88,"Completado":1};
 const SK = "bs_cg_v4";
- 
+
 function xd(s){ return (s&&s>1000)?new Date((s-25569)*86400000):null; }
 function ad(d,n){ if(!d)return null; const r=new Date(d); r.setDate(r.getDate()+n); return r; }
 function dd(d){ return d?Math.round((d-new Date())/86400000):null; }
 function fd(d){ return d?d.toLocaleDateString("es-CL",{day:"2-digit",month:"short",year:"2-digit"}):"—"; }
- 
+
 function esCritica(t) {
   if (t.estado === "Completado") return false;
   if (!t.inicioDate || !t.comprometidaDate) return false;
@@ -22,7 +22,7 @@ function esCritica(t) {
   const pctEsperado = Math.min(1, transcurrido / durTotal);
   return (pctEsperado - t.pct) > 0.25;
 }
- 
+
 function getSemanas4() {
   const hoy = new Date(); hoy.setHours(0,0,0,0);
   const diaSem = hoy.getDay()===0?6:hoy.getDay()-1;
@@ -36,7 +36,7 @@ function getSemanas4() {
     return {ini, fin, key, label};
   });
 }
- 
+
 const RAW = [
   {id:1,m:"Inmobiliaria Security",p:"SECURITY LO MATTA",j:"Felipe Soffia",t:"DOM RF",e:"Nicole Trepiana",s:"Pendiente Inicio",hp:60,he:0,i:46174,pl:30,c:46204,pe:"Actualizar planos As-Built"},
   {id:2,m:"Inmobiliaria Security",p:"SECURITY LO MATTA",j:"Felipe Soffia",t:"DOM Copropiedad",e:"Nicole Trepiana",s:"Casi Terminado",hp:60,he:50,i:46083,pl:60,c:46143,pe:""},
@@ -92,7 +92,7 @@ const RAW = [
   {id:52,m:"Inmobiliaria PY",p:"PY QUINTA LINDEROS L2",j:"Fernanda Jimenez",t:"DOM MP",e:"Fernanda Jimenez",s:"Pendiente Inicio",hp:40,he:0,i:46173,pl:30,c:46203,pe:""},
   {id:53,m:"Inmobiliaria PY",p:"PY RUKAN C5",j:"Fernanda Jimenez",t:"ARQ Cabida",e:"Fernanda Jimenez",s:"Pendiente Inicio",hp:40,he:0,i:46156,pl:30,c:46186,pe:""},
 ];
- 
+
 const COLABS = {
   1:[{arq:"Felipe Soffia",pct:20}],
   4:[{arq:"Marco Aguirre",pct:20},{arq:"Felipe Soffia",pct:5}],
@@ -108,7 +108,7 @@ const COLABS = {
   20:[{arq:"Felipe Soffia",pct:10}],
   21:[{arq:"Felipe Soffia",pct:10}],
 };
- 
+
 const INIT_TAREAS = RAW.map(function(r){
   return {
     id:r.id, mandante:r.m, proyecto:r.p, jefe:r.j, tarea:r.t, encargado:r.e,
@@ -120,13 +120,13 @@ const INIT_TAREAS = RAW.map(function(r){
   };
 });
 const INIT_PROS = [...new Set(INIT_TAREAS.map(function(t){return t.proyecto;}))];
- 
+
 // Storage — Supabase + localStorage fallback
 const SUPA_URL = "https://jhbhhyeysrprvvurylgv.supabase.co";
 const SUPA_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpoYmhoeWV5c3JwcnZ2dXJ5bGd2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3Mzc3MDEsImV4cCI6MjA5NTMxMzcwMX0.t-Butq0BzSoy1OVIqox_WON55SW5eddcdswFBorPEHE";
 const SUPA_H = {"Content-Type":"application/json","apikey":SUPA_KEY,"Authorization":"Bearer "+SUPA_KEY};
 const SUPA_ROW = "bs_control_v1";
- 
+
 function ser(tareas){
   return tareas.map(function(t){
     return Object.assign({},t,{
@@ -145,7 +145,7 @@ function des(tareas){
     });
   });
 }
- 
+
 function saveData(tareas,horas,pros){
   const body = JSON.stringify({tareas:ser(tareas),horas:horas,pros:pros,ts:new Date().toISOString()});
   try{localStorage.setItem(SK,body);}catch(e){}
@@ -159,7 +159,7 @@ function saveData(tareas,horas,pros){
       }
     }).catch(function(){});
 }
- 
+
 function loadData(){
   try{
     const raw=localStorage.getItem(SK);
@@ -167,7 +167,7 @@ function loadData(){
   }catch(e){}
   return null;
 }
- 
+
 function loadCloudData(onLoaded){
   fetch(SUPA_URL+"/rest/v1/control_gestion?key=eq."+SUPA_ROW+"&select=value",{headers:SUPA_H})
     .then(function(r){return r.json();})
@@ -179,7 +179,7 @@ function loadCloudData(onLoaded){
       }
     }).catch(function(){});
 }
- 
+
 // UI helpers
 function Badge({estado}){
   return <span style={{background:EC[estado]+"22",color:EC[estado],border:"1px solid "+EC[estado]+"44",borderRadius:4,padding:"2px 7px",fontSize:10,fontWeight:600,whiteSpace:"nowrap"}}>{estado}</span>;
@@ -194,10 +194,10 @@ function DaysLeft({date}){
   const color=d<0?"#ef4444":d<7?"#f59e0b":d<14?"#eab308":"#10b981";
   return <span style={{color:color,fontWeight:700}}>{d<0?Math.abs(d)+"d venc.":d+"d"}</span>;
 }
- 
+
 const INP={background:"#1e293b",border:"1px solid #334155",borderRadius:6,padding:"7px 9px",color:"#e2e8f0",fontSize:13,width:"100%",outline:"none"};
 const SEL_STYLE={background:"#0f172a",border:"1px solid #1e293b",borderRadius:6,padding:"7px 10px",color:"#e2e8f0",fontSize:12,cursor:"pointer"};
- 
+
 function ModalEditar({tarea,onSave,onClose,onDelete}){
   const semanas4=getSemanas4();
   const [f,setF]=useState({
@@ -209,7 +209,7 @@ function ModalEditar({tarea,onSave,onClose,onDelete}){
     comprStr:tarea.comprometidaDate?tarea.comprometidaDate.toISOString().slice(0,10):"",
   });
   const [confirmDel,setConfirmDel]=useState(false);
- 
+
   // Semanas historial (basado en f.inicioStr)
   function getSemanasHistorial() {
     const hoy = new Date(); hoy.setHours(0,0,0,0);
@@ -244,11 +244,11 @@ function ModalEditar({tarea,onSave,onClose,onDelete}){
   },[f.horasSemana,f.encargado,f.colaboradores]);
   const horasDisponibles = Math.max(0, +f.horasProg - horasEjecAuto);
   const set=function(k,v){setF(function(p){return Object.assign({},p,{[k]:v});});};
- 
+
   const colPctTotal=f.colaboradores.reduce(function(s,c){return s+(+c.pct||0);},0);
   const pctResp=Math.max(0,100-colPctTotal);
   const pctValido=colPctTotal<=100;
- 
+
   function setColab(idx,field,val){
     setF(function(p){
       const cols=[...p.colaboradores];
@@ -283,7 +283,7 @@ function ModalEditar({tarea,onSave,onClose,onDelete}){
     const hs=f.horasSemana[arq]||{};
     return semanas4.reduce(function(s,sem){return s+(hs[sem.key]||0);},0);
   }
- 
+
   function guardar(){
     if(!pctValido)return;
     const ini=f.inicioStr?new Date(f.inicioStr+"T12:00:00"):tarea.inicioDate;
@@ -296,7 +296,7 @@ function ModalEditar({tarea,onSave,onClose,onDelete}){
       inicioDate:ini,comprometidaDate:com,entregaDate:ad(ini,+f.plazo),pct:EP[f.estado]||0
     }));
   }
- 
+
   return (
     <div style={{position:"fixed",inset:0,background:"#000b",zIndex:999,display:"flex",alignItems:"center",justifyContent:"center",padding:12}}>
       <div style={{background:"#0f172a",border:"1px solid #334155",borderRadius:12,padding:20,width:"100%",maxWidth:480,color:"#e2e8f0",maxHeight:"92vh",overflowY:"auto"}}>
@@ -458,7 +458,7 @@ function ModalEditar({tarea,onSave,onClose,onDelete}){
     </div>
   );
 }
- 
+
 function ModalNuevaTarea({proyectoCtx,onSave,onClose}){
   const hoy=new Date().toISOString().slice(0,10);
   const [f,setF]=useState({tarea:"",encargado:ARQUITECTOS[0],estado:"Pendiente Inicio",horasProg:40,horasEjec:0,inicioStr:hoy,comprStr:"",plazo:30,pendientes:""});
@@ -525,7 +525,7 @@ function ModalNuevaTarea({proyectoCtx,onSave,onClose}){
     </div>
   );
 }
- 
+
 function ModalNuevoProyecto({onSave,onClose}){
   const [f,setF]=useState({nombre:"",mandante:"",jefe:ARQUITECTOS[0]});
   const set=function(k,v){setF(function(p){return Object.assign({},p,{[k]:v});});};
@@ -556,7 +556,7 @@ function ModalNuevoProyecto({onSave,onClose}){
     </div>
   );
 }
- 
+
 function calcHorasArqSem(t, arq, ini, fin) {
   const hoy = new Date(); hoy.setHours(0,0,0,0);
   const tF = t.entregaDate || t.comprometidaDate;
@@ -585,7 +585,7 @@ function calcHorasArqSem(t, arq, ini, fin) {
   const od = Math.max(0, Math.round((oF-oI)/86400000)+1);
   return hp*(od/dur);
 }
- 
+
 function ViewProyectos({tareas,pros,onEdit,onAddTarea,onDelProyecto}){
   const [confDel,setConfDel]=useState(null);
   const [filtroCrit,setFiltroCrit]=useState(null);
@@ -600,7 +600,7 @@ function ViewProyectos({tareas,pros,onEdit,onAddTarea,onDelProyecto}){
       return {p:p,ts:ts,pct:pct,hPend:hPend,hEjec:hEjec,crit:crit,mandante:ts[0].mandante,jefe:ts[0].jefe};
     }).filter(Boolean);
   },[tareas,pros]);
- 
+
   return (
     <div style={{display:"flex",flexDirection:"column",gap:12}}>
       {grupos.map(function(g){
@@ -679,7 +679,7 @@ function ViewProyectos({tareas,pros,onEdit,onAddTarea,onDelProyecto}){
     </div>
   );
 }
- 
+
 function ViewGantt({tareas,onEdit}){
   const hoy=new Date();
   const gIni=new Date(2026,2,1);
@@ -736,7 +736,7 @@ function ViewGantt({tareas,onEdit}){
     </div>
   );
 }
- 
+
 function ViewCarga({tareas}){
   const hoy=new Date();
   const diaSem=hoy.getDay()===0?6:hoy.getDay()-1;
@@ -746,7 +746,7 @@ function ViewCarga({tareas}){
     const fin=new Date(ini); fin.setDate(ini.getDate()+6);
     return {ini:ini,fin:fin,label:"S"+(i+1)};
   });
- 
+
   const datos=useMemo(function(){
     return ARQUITECTOS.map(function(arq){
       const ts=tareas.filter(function(t){return t.encargado===arq;});
@@ -765,9 +765,9 @@ function ViewCarga({tareas}){
       return {arq:arq,ts:todasTs,hTot:hTot,hEjec:hEjec,crit:crit,h30:h30};
     }).filter(function(d){return d.ts.length>0;});
   },[tareas]);
- 
+
   const maxH=Math.max.apply(null,datos.map(function(d){return Math.max.apply(null,d.h30);}).concat([1]));
- 
+
   return (
     <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(270px,1fr))",gap:14}}>
       {datos.map(function(data){
@@ -859,7 +859,7 @@ function ViewCarga({tareas}){
     </div>
   );
 }
- 
+
 function ViewDisponibilidad({tareas,horas,onUpdateHoras}){
   const hoy=new Date();
   const diaSem=hoy.getDay()===0?6:hoy.getDay()-1;
@@ -869,7 +869,7 @@ function ViewDisponibilidad({tareas,horas,onUpdateHoras}){
     const fin=new Date(ini); fin.setDate(ini.getDate()+6);
     return {ini:ini,fin:fin,label:ini.toLocaleDateString("es-CL",{day:"2-digit",month:"short"})+"–"+fin.toLocaleDateString("es-CL",{day:"2-digit",month:"short"})};
   });
- 
+
   const datos=useMemo(function(){
     return ARQUITECTOS.map(function(arq){
       const dis=horas[arq]||41;
@@ -880,7 +880,7 @@ function ViewDisponibilidad({tareas,horas,onUpdateHoras}){
       return {arq:arq,dis:dis,ts:ts,hSem:hSem};
     }).filter(function(d){return d.ts.length>0;});
   },[tareas,horas]);
- 
+
   function sem(p,d){
     const r=p/d;
     if(r>1.1)return{color:"#ef4444",bg:"#ef444422",label:"Sobrecargado"};
@@ -888,7 +888,7 @@ function ViewDisponibilidad({tareas,horas,onUpdateHoras}){
     if(r<0.1)return{color:"#475569",bg:"#47556922",label:"Sin tareas"};
     return{color:"#10b981",bg:"#10b98122",label:"OK"};
   }
- 
+
   return (
     <div>
       <div style={{display:"flex",gap:14,marginBottom:16,flexWrap:"wrap"}}>
@@ -949,7 +949,7 @@ function ViewDisponibilidad({tareas,horas,onUpdateHoras}){
     </div>
   );
 }
- 
+
 function ViewTabla({tareas,onEdit}){
   return (
     <div style={{overflowX:"auto"}}>
@@ -1004,7 +1004,7 @@ export default function App(){
   const [syncMsg,setSyncMsg]=useState("");
   const [storageSource,setStorageSource]=useState("local");
   const [w,setW]=useState(window.innerWidth);
- 
+
   useEffect(function(){
     const fn=function(){setW(window.innerWidth);};
     window.addEventListener("resize",fn);
@@ -1019,13 +1019,13 @@ export default function App(){
     });
     return function(){window.removeEventListener("resize",fn);};
   },[]);
- 
+
   const mob=w<768;
- 
+
   function persist(t2,p2,h2){saveData(t2||tareas,h2||horas,p2||pros);setSaved(true);setTimeout(function(){setSaved(false);},2000);}
   function setTs(fn){setTareasRaw(function(prev){const next=typeof fn==="function"?fn(prev):fn;persist(next,null,null);return next;});}
   function setHrs(fn){setHoras(function(prev){const next=typeof fn==="function"?fn(prev):fn;persist(null,null,next);return next;});}
- 
+
   function addT(t){setTs(function(p){return p.concat([t]);});setNtCtx(null);}
   function addP(f){
     const n=f.nombre.trim().toUpperCase();
@@ -1063,7 +1063,7 @@ export default function App(){
         } else {saveData(tareas,horas,pros);setSyncMsg("✓ Datos subidos a Supabase");}
       }).catch(function(e){setSyncMsg("Error: "+e.message);});
   }
- 
+
   const mandantes=useMemo(function(){return [...new Set(tareas.map(function(t){return t.mandante;}))].sort();},[tareas]);
   const etapas=useMemo(function(){return [...new Set(tareas.map(function(t){return t.tarea.split(" ")[0]}))].sort();},[tareas]);
   const filtradas=useMemo(function(){
@@ -1076,7 +1076,7 @@ export default function App(){
       return true;
     });
   },[tareas,vista,fMan,fArq,fEst,fPro,fEta]);
- 
+
   const kpis=useMemo(function(){
     const crit=tareas.filter(esCritica).length;
     const venc=tareas.filter(function(t){return t.estado!=="Completado"&&t.comprometidaDate&&dd(t.comprometidaDate)<0;}).length;
@@ -1084,9 +1084,9 @@ export default function App(){
     const atras=[...new Set(tareas.filter(function(t){return t.estado!=="Completado";}).map(function(t){return t.proyecto;}))].map(function(p){const ts=tareas.filter(function(t){return t.proyecto===p&&t.estado!=="Completado";});return {p:p,pct:ts.reduce(function(s,t){return s+t.pct;},0)/ts.length};}).sort(function(a,b){return a.pct-b.pct;})[0]||null;
     return {total:tareas.length,crit:crit,venc:venc,vencT:vencT,atras:atras};
   },[tareas]);
- 
+
   const btnS=function(active){return {background:active?"#6366f1":"transparent",border:active?"none":"1px solid #334155",borderRadius:6,padding:mob?"5px 10px":"6px 14px",color:active?"#fff":"#94a3b8",cursor:"pointer",fontSize:mob?11:12,fontWeight:active?600:400,whiteSpace:"nowrap"};};
- 
+
   return (
     <div style={{minHeight:"100vh",background:"#060f1e",color:"#e2e8f0",fontFamily:"'Segoe UI',system-ui,sans-serif"}}>
       <div style={{background:"#0a1628",borderBottom:"1px solid #1e293b",padding:mob?"10px 14px":"14px 20px",display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:8}}>
