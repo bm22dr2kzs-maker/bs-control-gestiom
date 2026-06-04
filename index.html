@@ -1,4 +1,27 @@
-import { useState, useMemo, useEffect } from "react";
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+  <meta name="apple-mobile-web-app-title" content="BS Control"/>
+  <title>BS Control de Gestión</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+  <style>
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; margin: 0; padding: 0; }
+    body { background: #060f1e; color: #e2e8f0; font-family: 'Segoe UI', system-ui, sans-serif; }
+    ::-webkit-scrollbar { width: 4px; height: 4px; }
+    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+const { useState, useMemo, useEffect } = React;
 
 const ARQUITECTOS = ["Felipe Soffia","Fernanda Jimenez","Juan Pablo Badia","Marco Aguirre","Nicole Trepiana","Oscar Leiva","Valeria Carbonell","Victor Venegas"];
 const HORAS_DEF = {"Felipe Soffia":41,"Fernanda Jimenez":41,"Juan Pablo Badia":41,"Marco Aguirre":41,"Oscar Leiva":41,"Victor Venegas":41,"Valeria Carbonell":33,"Nicole Trepiana":33};
@@ -987,7 +1010,7 @@ function ViewTabla({tareas,onEdit}){
     </div>
   );
 }
-export default function App(){
+function App(){
   const [tareas,setTareasRaw]=useState(function(){const d=loadData();return d?d.tareas:INIT_TAREAS;});
   const [pros,setPros]=useState(function(){const d=loadData();return d&&d.pros?d.pros:INIT_PROS;});
   const [horas,setHoras]=useState(function(){const d=loadData();return d&&d.horas?d.horas:HORAS_DEF;});
@@ -1144,3 +1167,9 @@ export default function App(){
     </div>
   );
 }
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>
