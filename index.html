@@ -1,27 +1,4 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <meta name="mobile-web-app-capable" content="yes"/>
-  <meta name="apple-mobile-web-app-capable" content="yes"/>
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
-  <meta name="apple-mobile-web-app-title" content="BS Control"/>
-  <title>BS Control de Gestión</title>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
-  <style>
-    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; margin: 0; padding: 0; }
-    body { background: #060f1e; color: #e2e8f0; font-family: 'Segoe UI', system-ui, sans-serif; }
-    ::-webkit-scrollbar { width: 4px; height: 4px; }
-    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
-  </style>
-</head>
-<body>
-  <div id="root"></div>
-  <script type="text/babel">
-const { useState, useMemo, useEffect } = React;
+import { useState, useMemo, useEffect } from "react";
  
 const ARQUITECTOS = ["Felipe Soffia","Fernanda Jimenez","Juan Pablo Badia","Marco Aguirre","Nicole Trepiana","Oscar Leiva","Valeria Carbonell","Victor Venegas"];
 const HORAS_DEF = {"Felipe Soffia":41,"Fernanda Jimenez":41,"Juan Pablo Badia":41,"Marco Aguirre":41,"Oscar Leiva":41,"Victor Venegas":41,"Valeria Carbonell":33,"Nicole Trepiana":33};
@@ -232,6 +209,40 @@ function ModalEditar({tarea,onSave,onClose,onDelete}){
     comprStr:tarea.comprometidaDate?tarea.comprometidaDate.toISOString().slice(0,10):"",
   });
   const [confirmDel,setConfirmDel]=useState(false);
+ 
+  // Semanas historial (basado en f.inicioStr)
+  function getSemanasHistorial() {
+    const hoy = new Date(); hoy.setHours(0,0,0,0);
+    const inicioTarea = f.inicioStr ? new Date(f.inicioStr+"T00:00:00") : null;
+    if(!inicioTarea) return [];
+    const diaSem = hoy.getDay()===0?6:hoy.getDay()-1;
+    const lunesActual = new Date(hoy); lunesActual.setDate(hoy.getDate()-diaSem);
+    const semanas = [];
+    let cur = new Date(inicioTarea);
+    const diaInicio = cur.getDay()===0?6:cur.getDay()-1;
+    cur.setDate(cur.getDate()-diaInicio); cur.setHours(0,0,0,0);
+    while(cur < lunesActual) {
+      const ini = new Date(cur);
+      const fin = new Date(cur); fin.setDate(cur.getDate()+6);
+      const wn = Math.ceil((ini.getDate()-ini.getDay()+1)/7);
+      const key = ini.getFullYear()+"-W"+String(wn).padStart(2,"0");
+      const label = ini.toLocaleDateString("es-CL",{day:"2-digit",month:"short"});
+      semanas.push({ini:ini,fin:fin,key:key,label:label,pasada:true});
+      cur.setDate(cur.getDate()+7);
+    }
+    return semanas;
+  }
+  const semanasHist = getSemanasHistorial();
+  const horasEjecAuto = useMemo(function(){
+    const arqs = [f.encargado].concat(f.colaboradores.map(function(c){return c.arq;}));
+    let total = 0;
+    arqs.forEach(function(arq){
+      const hs = f.horasSemana[arq] || {};
+      semanasHist.forEach(function(sem){total += +(hs[sem.key]||0);});
+    });
+    return Math.round(total*10)/10;
+  },[f.horasSemana,f.encargado,f.colaboradores]);
+  const horasDisponibles = Math.max(0, +f.horasProg - horasEjecAuto);
   const set=function(k,v){setF(function(p){return Object.assign({},p,{[k]:v});});};
  
   const colPctTotal=f.colaboradores.reduce(function(s,c){return s+(+c.pct||0);},0);
@@ -280,7 +291,7 @@ function ModalEditar({tarea,onSave,onClose,onDelete}){
     onSave(Object.assign({},tarea,{
       proyecto:f.proyecto.trim().toUpperCase(),mandante:f.mandante.trim(),
       jefe:f.jefe,encargado:f.encargado,estado:f.estado,
-      horasProg:+f.horasProg,horasEjec:+f.horasEjec,plazo:+f.plazo,
+      horasProg:+f.horasProg,horasEjec:horasEjecAuto,plazo:+f.plazo,
       pendientes:f.pendientes,colaboradores:f.colaboradores,horasSemana:f.horasSemana,
       inicioDate:ini,comprometidaDate:com,entregaDate:ad(ini,+f.plazo),pct:EP[f.estado]||0
     }));
@@ -353,14 +364,18 @@ function ModalEditar({tarea,onSave,onClose,onDelete}){
               </div>
             </div>
           </div>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
             <label style={{display:"flex",flexDirection:"column",gap:3}}>
               <span style={{fontSize:9,color:"#64748b",textTransform:"uppercase",letterSpacing:1}}>Horas prog.</span>
               <input type="number" value={f.horasProg} onChange={function(e){set("horasProg",e.target.value);}} style={INP}/>
             </label>
             <label style={{display:"flex",flexDirection:"column",gap:3}}>
-              <span style={{fontSize:9,color:"#64748b",textTransform:"uppercase",letterSpacing:1}}>Horas ejec.</span>
-              <input type="number" value={f.horasEjec} onChange={function(e){set("horasEjec",e.target.value);}} style={INP}/>
+              <span style={{fontSize:9,color:"#64748b",textTransform:"uppercase",letterSpacing:1}}>Horas ejec. ↗</span>
+              <div style={{background:"#0a1628",border:"1px solid #334155",borderRadius:6,padding:"7px 9px",color:"#10b981",fontWeight:700,fontSize:15,textAlign:"center"}}>{horasEjecAuto}h</div>
+            </label>
+            <label style={{display:"flex",flexDirection:"column",gap:3}}>
+              <span style={{fontSize:9,color:"#64748b",textTransform:"uppercase",letterSpacing:1}}>H. Disponibles</span>
+              <div style={{background:"#0a1628",border:"1px solid #334155",borderRadius:6,padding:"7px 9px",color:horasDisponibles<20?"#ef4444":horasDisponibles<50?"#f59e0b":"#6366f1",fontWeight:700,fontSize:15,textAlign:"center"}}>{horasDisponibles}h</div>
             </label>
           </div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
@@ -379,33 +394,42 @@ function ModalEditar({tarea,onSave,onClose,onDelete}){
           </label>
           {/* Horas semanales */}
           <div style={{background:"#0a1628",borderRadius:8,padding:10,border:"1px solid #1e293b"}}>
-            <div style={{fontSize:9,color:"#64748b",textTransform:"uppercase",letterSpacing:1,marginBottom:8}}>Horas planificadas próximas 4 semanas</div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr repeat(4, 50px)",gap:4,marginBottom:6}}>
-              <div style={{fontSize:8,color:"#475569"}}>Arquitecto</div>
-              {semanas4.map(function(s,i){return <div key={i} style={{fontSize:8,color:i===0?"#6366f1":"#475569",textAlign:"center",fontWeight:i===0?700:400}}>{s.label}</div>;})}
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+              <div style={{fontSize:9,color:"#64748b",textTransform:"uppercase",letterSpacing:1}}>Registro de horas por semana</div>
+              {semanasHist.length>0&&<div style={{fontSize:8,color:"#10b981"}}>↗ {semanasHist.length} sem. pasadas → Ejec: {horasEjecAuto}h</div>}
             </div>
             {[f.encargado].concat(f.colaboradores.map(function(c){return c.arq;})).map(function(arq,idx){
+              const esResp=idx===0;
               const hPend=hPendArq(arq);
               const hMan=hManArq(arq);
               const hRest=Math.max(0,hPend-hMan);
-              const esResp=idx===0;
+              const todasSemanas=semanasHist.concat(semanas4);
               return (
-                <div key={arq} style={{marginBottom:8}}>
-                  <div style={{display:"grid",gridTemplateColumns:"1fr repeat(4, 50px)",gap:4,alignItems:"center"}}>
-                    <div>
-                      <div style={{fontSize:9,color:esResp?"#6366f1":"#f59e0b",fontWeight:600,overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis"}}>{arq.split(" ")[0]}</div>
-                      <div style={{fontSize:8,color:"#475569"}}>{Math.round(hPend)}h pend.</div>
+                <div key={arq} style={{marginBottom:10}}>
+                  <div style={{fontSize:9,color:esResp?"#6366f1":"#f59e0b",fontWeight:600,marginBottom:4}}>{arq.split(" ")[0]} <span style={{color:"#475569",fontWeight:400,fontSize:8}}>({Math.round(hPendArq(arq))}h pendientes)</span></div>
+                  <div style={{overflowX:"auto",scrollbarWidth:"thin"}}>
+                    <div style={{display:"flex",gap:3,flexWrap:"nowrap"}}>
+                      {todasSemanas.map(function(sem,i){
+                        const pasada=i<semanasHist.length;
+                        const val=(f.horasSemana[arq]||{})[sem.key]||"";
+                        return (
+                          <div key={i} style={{textAlign:"center",width:"52px",flexShrink:0}}>
+                            <div style={{fontSize:7,color:pasada?"#10b981":i===semanasHist.length?"#6366f1":"#475569",marginBottom:2,fontWeight:pasada||i===semanasHist.length?700:400}}>{sem.label}</div>
+                            <input type="number" min={0} value={val}
+                              onChange={function(e){setHoraSem(arq,sem.key,e.target.value);}}
+                              placeholder="0"
+                              style={{width:"100%",background:pasada?"#0d1f0d":"#1e293b",border:"1px solid "+(pasada?"#10b98144":i===semanasHist.length?"#6366f133":"#334155"),borderRadius:4,padding:"3px 4px",color:pasada?"#10b981":i===semanasHist.length?"#6366f1":"#e2e8f0",fontSize:11,textAlign:"center",outline:"none"}}/>
+                          </div>
+                        );
+                      })}
                     </div>
-                    {semanas4.map(function(sem,i){
-                      return <input key={i} type="number" min={0} value={(f.horasSemana[arq]||{})[sem.key]||""} onChange={function(e){setHoraSem(arq,sem.key,e.target.value);}} placeholder="0" style={Object.assign({},INP,{padding:"4px 6px",fontSize:11,textAlign:"center",borderColor:i===0?"#6366f133":"#334155"})}/>;
-                    })}
                   </div>
                   <div style={{marginTop:3,background:"#1e293b",borderRadius:99,height:3,overflow:"hidden"}}>
                     <div style={{display:"flex",height:"100%"}}>
                       <div style={{width:(hPend>0?Math.min(100,hMan/hPend*100):0)+"%",background:esResp?"#6366f1":"#f59e0b"}}/>
                     </div>
                   </div>
-                  <div style={{fontSize:8,color:"#475569",marginTop:1,textAlign:"right"}}>{Math.round(hMan)}h asignadas · {Math.round(hRest)}h restantes auto</div>
+                  <div style={{fontSize:8,color:"#475569",marginTop:1,textAlign:"right"}}>{Math.round(hMan)}h plan. · {Math.round(hRest)}h restantes auto</div>
                 </div>
               );
             })}
@@ -963,7 +987,7 @@ function ViewTabla({tareas,onEdit}){
     </div>
   );
 }
-function App(){
+export default function App(){
   const [tareas,setTareasRaw]=useState(function(){const d=loadData();return d?d.tareas:INIT_TAREAS;});
   const [pros,setPros]=useState(function(){const d=loadData();return d&&d.pros?d.pros:INIT_PROS;});
   const [horas,setHoras]=useState(function(){const d=loadData();return d&&d.horas?d.horas:HORAS_DEF;});
@@ -1120,9 +1144,3 @@ function App(){
     </div>
   );
 }
- 
-    const root = ReactDOM.createRoot(document.getElementById('root'));
-    root.render(<App />);
-  </script>
-</body>
-</html>
