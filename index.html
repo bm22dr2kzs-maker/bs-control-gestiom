@@ -239,7 +239,8 @@ function ModalEditar({tarea,onSave,onClose,onDelete}){
   function getSemanasHistorial() {
     const hoy = new Date();
     const meses = [];
-    for(var i=5; i>=0; i--) {
+    // Empezar desde hace 6 meses hasta el mes ANTERIOR (no el actual)
+    for(var i=6; i>=1; i--) {
       var d = new Date(hoy.getFullYear(), hoy.getMonth()-i, 1);
       var fin = new Date(d.getFullYear(), d.getMonth()+1, 0);
       var key = d.getFullYear()+"-M"+String(d.getMonth()+1).padStart(2,"0");
