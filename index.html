@@ -603,32 +603,17 @@ function ModalNuevoProyecto({onSave,onClose}){
 }
 
 function calcHorasArqSem(t, arq, ini, fin) {
-  const hoy = new Date(); hoy.setHours(0,0,0,0);
-  const tF = t.entregaDate || t.comprometidaDate;
-  if(!tF) return 0;
-  const tI = new Date(Math.max(hoy, t.inicioDate || hoy));
-  const esResp = t.encargado === arq;
-  const col = esResp ? null : (t.colaboradores||[]).find(function(c){return c.arq===arq;});
-  if(!esResp && !col) return 0;
-  const colPctTotal = (t.colaboradores||[]).reduce(function(s,c){return s+(+c.pct||0);},0);
-  const pctArq = esResp ? Math.max(0,100-colPctTotal)/100 : (+col.pct||0)/100;
-  const hpBase = Math.max(0, t.horasProg - t.horasEjec) * pctArq;
-  // Horas manuales totales de este arq en las 4 semanas
   const hs = (t.horasSemana||{})[arq] || {};
-  const semanas4 = getSemanas4();
-  // Ver si esta semana tiene valor manual
+  // Solo usar horas manuales — si no hay valor ingresado, retorna 0
   const wn = Math.ceil((ini.getDate()-ini.getDay()+1)/7);
   const semKey = ini.getFullYear()+"-W"+String(wn).padStart(2,"0");
   const hManual = hs[semKey];
   if(hManual !== undefined && hManual !== null) return +hManual||0;
-  // Calcular automático: hpBase menos horas manuales ya asignadas
-  const hManTotal = semanas4.reduce(function(s,sem){return s+(hs[sem.key]||0);},0);
-  const hp = Math.max(0, hpBase - hManTotal);
-  if(!hp) return 0;
-  const dur = Math.max(1, Math.round((tF-tI)/86400000));
-  const oI = new Date(Math.max(tI,ini)), oF = new Date(Math.min(tF,fin));
-  const od = Math.max(0, Math.round((oF-oI)/86400000)+1);
-  return hp*(od/dur);
+  // También revisar clave mensual (para histórico)
+  const mesKey = ini.getFullYear()+"-M"+String(ini.getMonth()+1).padStart(2,"0");
+  const hMes = hs[mesKey];
+  if(hMes !== undefined && hMes !== null) return +hMes||0;
+  return 0;
 }
 
 function ViewProyectos({tareas,pros,onEdit,onAddTarea,onDelProyecto}){
@@ -636,14 +621,14 @@ function ViewProyectos({tareas,pros,onEdit,onAddTarea,onDelProyecto}){
   const [filtroCrit,setFiltroCrit]=useState(null);
   const grupos=useMemo(function(){
     return pros.map(function(p){
-      const ts=tareas.filter(function(t){return t.proyecto===p;});
+      const ts=tareas.filter(function(t){return t.proyecto===p;}).slice().sort(function(a,b){return a.tarea.localeCompare(b.tarea);});
       if(!ts.length)return null;
       const pct=ts.reduce(function(s,t){return s+t.pct;},0)/ts.length;
       const hPend=ts.reduce(function(s,t){return s+Math.max(0,t.horasProg-t.horasEjec);},0);
       const hEjec=ts.reduce(function(s,t){return s+t.horasEjec;},0);
       const crit=ts.filter(esCritica);
       return {p:p,ts:ts,pct:pct,hPend:hPend,hEjec:hEjec,crit:crit,mandante:ts[0].mandante,jefe:ts[0].jefe};
-    }).filter(Boolean);
+    }).filter(Boolean).sort(function(a,b){return a.p.localeCompare(b.p);});
   },[tareas,pros]);
 
   return (
