@@ -138,6 +138,7 @@ const INIT_TAREAS = RAW.map(function(r){
     estado:r.s, horasProg:r.hp, horasEjec:r.he, plazo:r.pl, pendientes:r.pe,
     colaboradores: COLABS[r.id] || [],
     horasSemana: {},
+    horasHistoricas: 0,
     inicioDate:xd(r.i), comprometidaDate:xd(r.c), entregaDate:ad(xd(r.i),r.pl),
     pct:EP[r.s]||0
   };
@@ -228,6 +229,7 @@ function ModalEditar({tarea,onSave,onClose,onDelete}){
     estado:tarea.estado,horasProg:tarea.horasProg,horasEjec:tarea.horasEjec,plazo:tarea.plazo,
     pendientes:tarea.pendientes,colaboradores:tarea.colaboradores||[],
     horasSemana:tarea.horasSemana||{},
+    horasHistoricas:tarea.horasHistoricas||0,
     inicioStr:tarea.inicioDate?tarea.inicioDate.toISOString().slice(0,10):"",
     comprStr:tarea.comprometidaDate?tarea.comprometidaDate.toISOString().slice(0,10):"",
   });
@@ -235,36 +237,27 @@ function ModalEditar({tarea,onSave,onClose,onDelete}){
 
   // Semanas historial (basado en f.inicioStr)
   function getSemanasHistorial() {
-    const hoy = new Date(); hoy.setHours(0,0,0,0);
-    const inicioTarea = f.inicioStr ? new Date(f.inicioStr+"T00:00:00") : null;
-    if(!inicioTarea) return [];
-    const diaSem = hoy.getDay()===0?6:hoy.getDay()-1;
-    const lunesActual = new Date(hoy); lunesActual.setDate(hoy.getDate()-diaSem);
-    const semanas = [];
-    let cur = new Date(inicioTarea);
-    const diaInicio = cur.getDay()===0?6:cur.getDay()-1;
-    cur.setDate(cur.getDate()-diaInicio); cur.setHours(0,0,0,0);
-    while(cur < lunesActual) {
-      const ini = new Date(cur);
-      const fin = new Date(cur); fin.setDate(cur.getDate()+6);
-      const wn = Math.ceil((ini.getDate()-ini.getDay()+1)/7);
-      const key = ini.getFullYear()+"-W"+String(wn).padStart(2,"0");
-      const label = ini.toLocaleDateString("es-CL",{day:"2-digit",month:"short"});
-      semanas.push({ini:ini,fin:fin,key:key,label:label,pasada:true});
-      cur.setDate(cur.getDate()+7);
+    const hoy = new Date();
+    const meses = [];
+    for(var i=5; i>=0; i--) {
+      var d = new Date(hoy.getFullYear(), hoy.getMonth()-i, 1);
+      var fin = new Date(d.getFullYear(), d.getMonth()+1, 0);
+      var key = d.getFullYear()+"-M"+String(d.getMonth()+1).padStart(2,"0");
+      var label = d.toLocaleDateString("es-CL",{month:"short",year:"2-digit"});
+      meses.push({ini:d,fin:fin,key:key,label:label,pasada:true});
     }
-    return semanas.slice(-6); // mostrar solo últimas 8 semanas pasadas
+    return meses;
   }
   const semanasHist = getSemanasHistorial();
   const horasEjecAuto = useMemo(function(){
     const arqs = [f.encargado].concat(f.colaboradores.map(function(c){return c.arq;}));
-    let total = 0;
+    let total = +(f.horasHistoricas||0);
     arqs.forEach(function(arq){
       const hs = f.horasSemana[arq] || {};
       semanasHist.forEach(function(sem){total += +(hs[sem.key]||0);});
     });
     return Math.round(total*10)/10;
-  },[f.horasSemana,f.encargado,f.colaboradores]);
+  },[f.horasSemana,f.encargado,f.colaboradores,f.horasHistoricas]);
   const horasDisponibles = Math.max(0, +f.horasProg - horasEjecAuto);
   const set=function(k,v){setF(function(p){return Object.assign({},p,{[k]:v});});};
 
@@ -315,7 +308,7 @@ function ModalEditar({tarea,onSave,onClose,onDelete}){
       proyecto:f.proyecto.trim().toUpperCase(),mandante:f.mandante.trim(),
       jefe:f.jefe,encargado:f.encargado,estado:f.estado,
       horasProg:+f.horasProg,horasEjec:horasEjecAuto,plazo:+f.plazo,
-      pendientes:f.pendientes,colaboradores:f.colaboradores,horasSemana:f.horasSemana,
+      pendientes:f.pendientes,colaboradores:f.colaboradores,horasSemana:f.horasSemana,horasHistoricas:+(f.horasHistoricas||0),
       inicioDate:ini,comprometidaDate:com,entregaDate:ad(ini,+f.plazo),pct:EP[f.estado]||0
     }));
   }
@@ -418,39 +411,67 @@ function ModalEditar({tarea,onSave,onClose,onDelete}){
           {/* Horas semanales */}
           <div style={{background:"#0a1628",borderRadius:8,padding:10,border:"1px solid #1e293b"}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-              <div style={{fontSize:9,color:"#64748b",textTransform:"uppercase",letterSpacing:1}}>Registro de horas por semana</div>
+              <div style={{fontSize:9,color:"#64748b",textTransform:"uppercase",letterSpacing:1}}>REGISTRO DE HORAS</div>
               {semanasHist.length>0&&<div style={{fontSize:8,color:"#10b981"}}>↗ {semanasHist.length} sem. pasadas → Ejec: {horasEjecAuto}h</div>}
             </div>
+
             {[f.encargado].concat(f.colaboradores.map(function(c){return c.arq;})).map(function(arq,idx){
               const esResp=idx===0;
               const hPend=hPendArq(arq);
               const hMan=hManArq(arq);
               const hRest=Math.max(0,hPend-hMan);
-              const todasSemanas=semanasHist.concat(semanas4);
               return (
                 <div key={arq} style={{marginBottom:10}}>
-                  <div style={{fontSize:9,color:esResp?"#6366f1":"#f59e0b",fontWeight:600,marginBottom:4}}>{arq.split(" ")[0]} <span style={{color:"#475569",fontWeight:400,fontSize:8}}>({Math.round(hPendArq(arq))}h pendientes)</span></div>
-                  <div style={{overflowX:"auto",scrollbarWidth:"thin"}}>
+                  <div style={{fontSize:9,color:esResp?"#6366f1":"#f59e0b",fontWeight:600,marginBottom:6}}>{arq.split(" ")[0]} <span style={{color:"#475569",fontWeight:400,fontSize:8}}>({Math.round(hPendArq(arq))}h pendientes)</span></div>
+
+                  {/* Fila 1: Hist.ant. + 6 meses pasados */}
+                  <div style={{fontSize:7,color:"#475569",textTransform:"uppercase",letterSpacing:0.5,marginBottom:3}}>Histórico</div>
+                  <div style={{overflowX:"auto",scrollbarWidth:"thin",marginBottom:6}}>
                     <div style={{display:"flex",gap:3,flexWrap:"nowrap"}}>
-                      {todasSemanas.map(function(sem,i){
-                        const pasada=i<semanasHist.length;
+                      <div style={{textAlign:"center",width:"52px",flexShrink:0}}>
+                        <div style={{fontSize:7,color:"#f59e0b",marginBottom:2,fontWeight:700}}>Ant.</div>
+                        <input type="number" min={0}
+                          value={idx===0?(f.horasHistoricas||""):""}
+                          onChange={idx===0?function(e){set("horasHistoricas",+e.target.value||0);}:function(){}}
+                          readOnly={idx!==0}
+                          placeholder="0"
+                          style={{width:"100%",background:"#1a1200",border:"1px solid #f59e0b44",borderRadius:4,padding:"3px 4px",color:"#f59e0b",fontSize:11,textAlign:"center",outline:"none",opacity:idx===0?1:0.3}}/>
+                      </div>
+                      <div style={{width:1,background:"#334155",flexShrink:0,alignSelf:"stretch"}}/>
+                      {semanasHist.map(function(sem,i){
                         const val=(f.horasSemana[arq]||{})[sem.key]||"";
                         return (
                           <div key={i} style={{textAlign:"center",width:"52px",flexShrink:0}}>
-                            <div style={{fontSize:7,color:pasada?"#10b981":i===semanasHist.length?"#6366f1":"#475569",marginBottom:2,fontWeight:pasada||i===semanasHist.length?700:400}}>{sem.label}</div>
+                            <div style={{fontSize:7,color:"#10b981",marginBottom:2,fontWeight:700}}>{sem.label}</div>
                             <input type="number" min={0} value={val}
                               onChange={function(e){setHoraSem(arq,sem.key,e.target.value);}}
                               placeholder="0"
-                              style={{width:"100%",background:pasada?"#0d1f0d":"#1e293b",border:"1px solid "+(pasada?"#10b98144":i===semanasHist.length?"#6366f133":"#334155"),borderRadius:4,padding:"3px 4px",color:pasada?"#10b981":i===semanasHist.length?"#6366f1":"#e2e8f0",fontSize:11,textAlign:"center",outline:"none"}}/>
+                              style={{width:"100%",background:"#0d1f0d",border:"1px solid #10b98144",borderRadius:4,padding:"3px 4px",color:"#10b981",fontSize:11,textAlign:"center",outline:"none"}}/>
                           </div>
                         );
                       })}
                     </div>
                   </div>
-                  <div style={{marginTop:3,background:"#1e293b",borderRadius:99,height:3,overflow:"hidden"}}>
-                    <div style={{display:"flex",height:"100%"}}>
-                      <div style={{width:(hPend>0?Math.min(100,hMan/hPend*100):0)+"%",background:esResp?"#6366f1":"#f59e0b"}}/>
-                    </div>
+
+                  {/* Fila 2: 4 semanas futuras */}
+                  <div style={{fontSize:7,color:"#475569",textTransform:"uppercase",letterSpacing:0.5,marginBottom:3}}>Planificación</div>
+                  <div style={{display:"flex",gap:3,flexWrap:"nowrap"}}>
+                    {semanas4.map(function(sem,i){
+                      const val=(f.horasSemana[arq]||{})[sem.key]||"";
+                      return (
+                        <div key={i} style={{textAlign:"center",width:"52px",flexShrink:0}}>
+                          <div style={{fontSize:7,color:i===0?"#6366f1":"#475569",marginBottom:2,fontWeight:i===0?700:400}}>{sem.label}</div>
+                          <input type="number" min={0} value={val}
+                            onChange={function(e){setHoraSem(arq,sem.key,e.target.value);}}
+                            placeholder="0"
+                            style={{width:"100%",background:"#1e293b",border:"1px solid "+(i===0?"#6366f133":"#334155"),borderRadius:4,padding:"3px 4px",color:i===0?"#6366f1":"#e2e8f0",fontSize:11,textAlign:"center",outline:"none"}}/>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <div style={{marginTop:6,background:"#1e293b",borderRadius:99,height:3,overflow:"hidden"}}>
+                    <div style={{width:(hPend>0?Math.min(100,hMan/hPend*100):0)+"%",height:"100%",background:esResp?"#6366f1":"#f59e0b",borderRadius:99}}/>
                   </div>
                   <div style={{fontSize:8,color:"#475569",marginTop:1,textAlign:"right"}}>{Math.round(hMan)}h plan. · {Math.round(hRest)}h restantes auto</div>
                 </div>
@@ -492,7 +513,7 @@ function ModalNuevaTarea({proyectoCtx,onSave,onClose}){
     const com=f.comprStr?new Date(f.comprStr+"T12:00:00"):ad(ini,+f.plazo);
     onSave({id:Date.now(),mandante:proyectoCtx.mandante,proyecto:proyectoCtx.proyecto,jefe:proyectoCtx.jefe,
       tarea:f.tarea.trim(),encargado:f.encargado,estado:f.estado,horasProg:+f.horasProg,horasEjec:+f.horasEjec,
-      plazo:+f.plazo,pendientes:f.pendientes,colaboradores:[],horasSemana:{},
+      plazo:+f.plazo,pendientes:f.pendientes,colaboradores:[],horasSemana:{},horasHistoricas:0,
       inicioDate:ini,comprometidaDate:com,entregaDate:ad(ini,+f.plazo),pct:EP[f.estado]||0});
   }
   return (
@@ -1054,7 +1075,7 @@ function App(){
     const n=f.nombre.trim().toUpperCase();
     const np=pros.concat([n]);
     setPros(np);
-    setTs(function(prev){return prev.concat([{id:Date.now(),mandante:f.mandante,proyecto:n,jefe:f.jefe,tarea:"— Sin tareas —",encargado:f.jefe,estado:"Pendiente Inicio",horasProg:0,horasEjec:0,plazo:0,pendientes:"",colaboradores:[],horasSemana:{},inicioDate:new Date(),comprometidaDate:null,entregaDate:null,pct:0}]);});
+    setTs(function(prev){return prev.concat([{id:Date.now(),mandante:f.mandante,proyecto:n,jefe:f.jefe,tarea:"— Sin tareas —",encargado:f.jefe,estado:"Pendiente Inicio",horasProg:0,horasEjec:0,plazo:0,pendientes:"",colaboradores:[],horasSemana:{},horasHistoricas:0,inicioDate:new Date(),comprometidaDate:null,entregaDate:null,pct:0}]);});
     setNpOpen(false);persist(null,np,null);
   }
   function saveT(upd){
