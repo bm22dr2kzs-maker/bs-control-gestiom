@@ -720,7 +720,7 @@ function ViewGantt({tareas,onEdit}){
   const meses=[];
   let cur=new Date(gIni);
   while(cur<=gFin){meses.push(new Date(cur));cur=new Date(cur.getFullYear(),cur.getMonth()+1,1);}
-  const pros=[...new Set(tareas.map(function(t){return t.proyecto;}))];
+  const pros=[...new Set(tareas.map(function(t){return t.proyecto;}))].sort();
   return (
     <div style={{overflowX:"auto"}}>
       <div style={{minWidth:860}}>
@@ -736,7 +736,7 @@ function ViewGantt({tareas,onEdit}){
           return (
             <div key={p} style={{marginBottom:6}}>
               <div style={{fontSize:9,color:"#6366f1",fontWeight:700,textTransform:"uppercase",letterSpacing:1.5,padding:"5px 0 2px",borderTop:"1px solid #1e293b"}}>{p}</div>
-              {tareas.filter(function(t){return t.proyecto===p;}).map(function(t){
+              {tareas.filter(function(t){return t.proyecto===p;}).slice().sort(function(a,b){return a.tarea.localeCompare(b.tarea);}).map(function(t){
                 const sp=pct(t.inicioDate);
                 const ep=pct(t.entregaDate||t.comprometidaDate);
                 const cp=pct(t.comprometidaDate);
@@ -981,6 +981,10 @@ function ViewDisponibilidad({tareas,horas,onUpdateHoras}){
 }
 
 function ViewTabla({tareas,onEdit}){
+  const tareasOrdenadas = tareas.slice().sort(function(a,b){
+    const cp = a.proyecto.localeCompare(b.proyecto);
+    return cp !== 0 ? cp : a.tarea.localeCompare(b.tarea);
+  });
   return (
     <div style={{overflowX:"auto"}}>
       <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
@@ -992,7 +996,7 @@ function ViewTabla({tareas,onEdit}){
           </tr>
         </thead>
         <tbody>
-          {tareas.map(function(t){
+          {tareasOrdenadas.map(function(t){
             return (
               <tr key={t.id} onClick={function(){onEdit(t);}} style={{borderBottom:"1px solid #0f172a",cursor:"pointer"}}
                 onMouseEnter={function(e){e.currentTarget.style.background="#0f172a";}}
