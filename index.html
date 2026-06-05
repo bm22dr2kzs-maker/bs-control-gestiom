@@ -253,7 +253,7 @@ function ModalEditar({tarea,onSave,onClose,onDelete}){
       semanas.push({ini:ini,fin:fin,key:key,label:label,pasada:true});
       cur.setDate(cur.getDate()+7);
     }
-    return semanas.slice(-8); // mostrar solo últimas 8 semanas pasadas
+    return semanas.slice(-6); // mostrar solo últimas 8 semanas pasadas
   }
   const semanasHist = getSemanasHistorial();
   const horasEjecAuto = useMemo(function(){
